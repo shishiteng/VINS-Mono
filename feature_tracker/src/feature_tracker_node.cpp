@@ -4,12 +4,7 @@
 #include <sensor_msgs/PointCloud.h>
 #include <sensor_msgs/Imu.h>
 #include <cv_bridge/cv_bridge.h>
-
 #include <message_filters/subscriber.h>
-#include <message_filters/synchronizer.h>
-#include <message_filters/sync_policies/exact_time.h>
-
-#include <thread>
 
 #include "feature_tracker.h"
 
@@ -32,8 +27,21 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     {
         first_image_flag = false;
         first_image_time = img_msg->header.stamp.toSec();
-        return;
     }
+
+    // frequency control
+    if (round(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time)) <= FREQ)
+    {
+        PUB_THIS_FRAME = true;
+        // reset the frequency control
+        if (abs(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time) - FREQ) < 0.01 * FREQ)
+        {
+            first_image_time = img_msg->header.stamp.toSec();
+            pub_count = 0;
+        }
+    }
+    else
+        PUB_THIS_FRAME = false;
 
     cv_bridge::CvImageConstPtr ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
     cv::Mat show_img = ptr->image;
@@ -59,7 +67,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 #endif
     }
 
-    if ( round(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time)) <= FREQ && STEREO_TRACK && trackerData[0].cur_pts.size() > 0)
+    if ( PUB_THIS_FRAME && STEREO_TRACK && trackerData[0].cur_pts.size() > 0)
     {
         pub_count++;
         r_status.clear();
@@ -106,6 +114,7 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         }
     }
 
+#if 0
     for (unsigned int i = 0;; i++)
     {
         bool completed = false;
@@ -115,14 +124,10 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         if (!completed)
             break;
     }
+#endif
 
-   if (round(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time)) <= FREQ)
+   if (PUB_THIS_FRAME)
    {
-        if (abs(1.0 * pub_count / (img_msg->header.stamp.toSec() - first_image_time) - FREQ) < 0.01 * FREQ)
-        {
-            first_image_time = img_msg->header.stamp.toSec();
-              pub_count = 0;
-        }
         pub_count++;
         sensor_msgs::PointCloudPtr feature_points(new sensor_msgs::PointCloud);
         sensor_msgs::ChannelFloat32 id_of_point;
@@ -142,6 +147,10 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                 auto &ids = trackerData[i].ids;
                 for (unsigned int j = 0; j < ids.size(); j++)
                 {
+		  //不要跟踪差的点
+		  //if(trackerData[i].track_cnt[j]<3)
+		  //continue;
+
                     int p_id = ids[j];
                     hash_ids[i].insert(p_id);
                     geometry_msgs::Point32 p;
@@ -199,10 +208,20 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                     for (unsigned int j = 0; j < trackerData[i].cur_pts.size(); j++)
                     {
                         double len = std::min(1.0, 1.0 * trackerData[i].track_cnt[j] / WINDOW_SIZE);
-                        cv::circle(tmp_img, trackerData[i].cur_pts[j], 2, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
-                        //char name[10];
-                        //sprintf(name, "%d", trackerData[i].ids[j]);
-                        //cv::putText(tmp_img, name, trackerData[i].cur_pts[j], cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 0));
+                        //cv::circle(tmp_img, trackerData[i].cur_pts[j], 2, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
+			cv::circle(tmp_img, trackerData[i].cur_pts[j], 1, cv::Scalar(255 * (1 - len), 0, 255 * len), 2);
+
+                        char name[10];
+                        sprintf(name, "%d", trackerData[i].track_cnt[j]);
+                        //sprintf(name, "%d:%d", trackerData[i].ids[j], trackerData[i].track_cnt[j]);
+                        cv::putText(tmp_img, name, trackerData[i].cur_pts[j], cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 255, 0));
+#if 0
+			for(int a=0;a<trackerData[i].prev_pts.size();a++) {
+			  if(trackerData[i].prev_ids[a] == trackerData[i].ids[j]) {
+			    cv::line(tmp_img, trackerData[i].cur_pts[j], trackerData[i].prev_pts[a], cv::Scalar(0, 255, 0));
+			  }
+			}
+#endif
                     }
                 }
                 else
@@ -216,13 +235,20 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
                         }
                     }
                 }
+
+	
+
+		cv::imshow("feature", tmp_img);
+		cv::waitKey(1);
             }
-            /*
-            cv::imshow("vis", stereo_img);
-            cv::waitKey(5);
-            */
+
+            //cv::imshow("vis", stereo_img);
+            //cv::waitKey(1);
+	
+
             pub_match.publish(ptr->toImageMsg());
         }
+
     }
     ROS_INFO("whole feature tracker processing costs: %f", t_r.toc());
 }
@@ -231,7 +257,8 @@ int main(int argc, char **argv)
 {
     ros::init(argc, argv, "feature_tracker");
     ros::NodeHandle n("~");
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Debug);
+    //ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME, ros::console::levels::Info);
     readParameters(n);
 
     for (int i = 0; i < NUM_OF_CAM; i++)
@@ -252,10 +279,10 @@ int main(int argc, char **argv)
         }
     }
 
-    ros::Subscriber sub_img = n.subscribe(IMAGE_TOPIC, 100, img_callback);
+    ros::Subscriber sub_img = n.subscribe(IMAGE_TOPIC, 1, img_callback);
 
-    pub_img = n.advertise<sensor_msgs::PointCloud>("feature", 1000);
-    pub_match = n.advertise<sensor_msgs::Image>("feature_img",1000);
+    pub_img = n.advertise<sensor_msgs::PointCloud>("feature", 1);
+    pub_match = n.advertise<sensor_msgs::Image>("feature_img",1);
     /*
     if (SHOW_TRACK)
         cv::namedWindow("vis", cv::WINDOW_NORMAL);

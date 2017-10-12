@@ -11,9 +11,7 @@
 
 #include "camodocal/camera_models/CameraFactory.h"
 #include "camodocal/camera_models/CataCamera.h"
-#include "camodocal/camera_models/EquidistantCamera.h"
 #include "camodocal/camera_models/PinholeCamera.h"
-#include "camodocal/camera_models/ScaramuzzaCamera.h"
 
 #include "parameters.h"
 #include "tic_toc.h"
@@ -46,6 +44,8 @@ class FeatureTracker
 
     void rejectWithF();
 
+    void rejectWithORB();
+
     vector<cv::Point2f> undistortedPoints();
 
     cv::Mat mask;
@@ -53,9 +53,12 @@ class FeatureTracker
     cv::Mat prev_img, cur_img, forw_img;
     vector<cv::Point2f> n_pts;
     vector<cv::Point2f> prev_pts, cur_pts, forw_pts;
+    vector<cv::Point2f> tmp_pts;//用于画光流向量
+    vector<int> tmp_ids;//
+    vector<int> prev_ids;//
     vector<int> ids;
     vector<int> track_cnt;
     camodocal::CameraPtr m_camera;
 
-    static int n_id, img_cnt;
+    static int n_id;
 };
