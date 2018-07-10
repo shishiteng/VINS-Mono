@@ -160,11 +160,14 @@ void ProjectionFactor::check(double **parameters)
     Eigen::Vector3d pts_imu_j = Qj.inverse() * (pts_w - Pj);
     Eigen::Vector3d pts_camera_j = qic.inverse() * (pts_imu_j - tic);
 
-    double dep_j = pts_camera_j.z();
 
     Eigen::Vector2d residual;
+#ifdef UNIT_SPHERE_ERROR 
+    residual =  tangent_base * (pts_camera_j.normalized() - pts_j.normalized());
+#else
+    double dep_j = pts_camera_j.z();
     residual = (pts_camera_j / dep_j).head<2>() - pts_j.head<2>();
-
+#endif
     residual = sqrt_info * residual;
 
     puts("num");
@@ -208,12 +211,14 @@ void ProjectionFactor::check(double **parameters)
         Eigen::Vector3d pts_imu_j = Qj.inverse() * (pts_w - Pj);
         Eigen::Vector3d pts_camera_j = qic.inverse() * (pts_imu_j - tic);
 
-        double dep_j = pts_camera_j.z();
-
         Eigen::Vector2d tmp_residual;
+#ifdef UNIT_SPHERE_ERROR 
+        tmp_residual =  tangent_base * (pts_camera_j.normalized() - pts_j.normalized());
+#else
+        double dep_j = pts_camera_j.z();
         tmp_residual = (pts_camera_j / dep_j).head<2>() - pts_j.head<2>();
+#endif
         tmp_residual = sqrt_info * tmp_residual;
-
         num_jacobian.col(k) = (tmp_residual - residual) / eps;
     }
     std::cout << num_jacobian << std::endl;

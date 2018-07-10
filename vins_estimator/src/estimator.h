@@ -15,34 +15,13 @@
 #include "factor/imu_factor.h"
 #include "factor/pose_local_parameterization.h"
 #include "factor/projection_factor.h"
+#include "factor/projection_td_factor.h"
 #include "factor/marginalization_factor.h"
 
-#include <thread>
-#include <pthread.h>
-#include <syscall.h>
-#include <sys/types.h>
 #include <unordered_map>
 #include <queue>
 #include <opencv2/core/eigen.hpp>
 
-struct RetriveData
-{
-    /* data */
-    int old_index;
-    int cur_index;
-    double header;
-    Vector3d P_old;
-    Quaterniond Q_old;
-    Vector3d P_cur;
-    Quaterniond Q_cur;
-    vector<cv::Point2f> measurements;
-    vector<int> features_ids; 
-    bool use;
-    Vector3d relative_t;
-    Quaterniond relative_q;
-    double relative_yaw;
-    double loop_pose[7];
-};
 
 class Estimator
 {
@@ -53,7 +32,8 @@ class Estimator
 
     // interface
     void processIMU(double t, const Vector3d &linear_acceleration, const Vector3d &angular_velocity);
-    void processImage(const map<int, vector<pair<int, Vector3d>>> &image, const std_msgs::Header &header);
+    void processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const std_msgs::Header &header);
+    void setReloFrame(double _frame_stamp, int _frame_index, vector<Vector3d> &_match_points, Vector3d _relo_t, Matrix3d _relo_r);
 
     // internal
     void clearState();
@@ -96,6 +76,7 @@ class Estimator
     Matrix3d Rs[(WINDOW_SIZE + 1)];
     Vector3d Bas[(WINDOW_SIZE + 1)];
     Vector3d Bgs[(WINDOW_SIZE + 1)];
+    double td;
 
     Matrix3d back_R0, last_R, last_R0;
     Vector3d back_P0, last_P, last_P0;
@@ -130,8 +111,9 @@ class Estimator
     double para_Feature[NUM_OF_F][SIZE_FEATURE];
     double para_Ex_Pose[NUM_OF_CAM][SIZE_POSE];
     double para_Retrive_Pose[SIZE_POSE];
+    double para_Td[1][1];
+    double para_Tr[1][1];
 
-    RetriveData retrive_pose_data, front_pose;
     int loop_window_index;
 
     MarginalizationInfo *last_marginalization_info;
@@ -140,4 +122,18 @@ class Estimator
     map<double, ImageFrame> all_image_frame;
     IntegrationBase *tmp_pre_integration;
 
+    //relocalization variable
+    bool relocalization_info;
+    double relo_frame_stamp;
+    double relo_frame_index;
+    int relo_frame_local_index;
+    vector<Vector3d> match_points;
+    double relo_Pose[SIZE_POSE];
+    Matrix3d drift_correct_r;
+    Vector3d drift_correct_t;
+    Vector3d prev_relo_t;
+    Matrix3d prev_relo_r;
+    Vector3d relo_relative_t;
+    Quaterniond relo_relative_q;
+    double relo_relative_yaw;
 };

@@ -4,7 +4,6 @@ Estimator::Estimator(): f_manager{Rs}
 {
     ROS_INFO("init begins");
     clearState();
-    failure_occur = 0;
 }
 
 void Estimator::setParameter()
@@ -16,6 +15,8 @@ void Estimator::setParameter()
     }
     f_manager.setRic(ric);
     ProjectionFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
+    ProjectionTdFactor::sqrt_info = FOCAL_LENGTH / 1.5 * Matrix2d::Identity();
+    td = TD;
 }
 
 void Estimator::clearState()
@@ -52,6 +53,8 @@ void Estimator::clearState()
     solver_flag = INITIAL;
     initial_timestamp = 0;
     all_image_frame.clear();
+    td = TD;
+
 
     if (tmp_pre_integration != nullptr)
         delete tmp_pre_integration;
@@ -63,6 +66,12 @@ void Estimator::clearState()
     last_marginalization_parameter_blocks.clear();
 
     f_manager.clearState();
+
+    failure_occur = 0;
+    relocalization_info = 0;
+
+    drift_correct_r = Matrix3d::Identity();
+    drift_correct_t = Vector3d::Zero();
 }
 
 void Estimator::processIMU(double dt, const Vector3d &linear_acceleration, const Vector3d &angular_velocity)
@@ -101,11 +110,11 @@ void Estimator::processIMU(double dt, const Vector3d &linear_acceleration, const
     gyr_0 = angular_velocity;
 }
 
-void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image, const std_msgs::Header &header)
+void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> &image, const std_msgs::Header &header)
 {
     ROS_DEBUG("new image coming ------------------------------------------");
     ROS_DEBUG("Adding feature points %lu", image.size());
-    if (f_manager.addFeatureCheckParallax(frame_count, image))
+    if (f_manager.addFeatureCheckParallax(frame_count, image, td))
         marginalization_flag = MARGIN_OLD;
     else
         marginalization_flag = MARGIN_SECOND_NEW;
@@ -299,10 +308,8 @@ bool Estimator::initialStructure()
         for (auto &id_pts : frame_it->second.points)
         {
             int feature_id = id_pts.first;
-            //cout << "feature id " << feature_id;
             for (auto &i_p : id_pts.second)
             {
-                //cout << " pts image_frame " << (i_p.second.head<2>() * 460 ).transpose() << endl;
                 it = sfm_tracked_points.find(feature_id);
                 if(it != sfm_tracked_points.end())
                 {
@@ -318,7 +325,7 @@ bool Estimator::initialStructure()
         cv::Mat K = (cv::Mat_<double>(3, 3) << 1, 0, 0, 0, 1, 0, 0, 0, 1);     
         if(pts_3_vector.size() < 6)
         {
-            //cout << "pts_3_vector size " << pts_3_vector.size() << endl;
+            cout << "pts_3_vector size " << pts_3_vector.size() << endl;
             ROS_DEBUG("Not enough points for solve pnp !");
             return false;
         }
@@ -509,6 +516,8 @@ void Estimator::vector2double()
     VectorXd dep = f_manager.getDepthVector();
     for (int i = 0; i < f_manager.getFeatureCount(); i++)
         para_Feature[i][0] = dep(i);
+    if (ESTIMATE_TD)
+        para_Td[0][0] = td;
 }
 
 void Estimator::double2vector()
@@ -529,14 +538,24 @@ void Estimator::double2vector()
     double y_diff = origin_R0.x() - origin_R00.x();
     //TODO
     Matrix3d rot_diff = Utility::ypr2R(Vector3d(y_diff, 0, 0));
+    if (abs(abs(origin_R0.y()) - 90) < 1.0 || abs(abs(origin_R00.y()) - 90) < 1.0)
+    {
+        ROS_DEBUG("euler singular point!");
+        rot_diff = Rs[0] * Quaterniond(para_Pose[0][6],
+                                       para_Pose[0][3],
+                                       para_Pose[0][4],
+                                       para_Pose[0][5]).toRotationMatrix().transpose();
+    }
 
     for (int i = 0; i <= WINDOW_SIZE; i++)
     {
 
         Rs[i] = rot_diff * Quaterniond(para_Pose[i][6], para_Pose[i][3], para_Pose[i][4], para_Pose[i][5]).normalized().toRotationMatrix();
+        
         Ps[i] = rot_diff * Vector3d(para_Pose[i][0] - para_Pose[0][0],
                                 para_Pose[i][1] - para_Pose[0][1],
                                 para_Pose[i][2] - para_Pose[0][2]) + origin_P0;
+
         Vs[i] = rot_diff * Vector3d(para_SpeedBias[i][0],
                                     para_SpeedBias[i][1],
                                     para_SpeedBias[i][2]);
@@ -565,7 +584,31 @@ void Estimator::double2vector()
     for (int i = 0; i < f_manager.getFeatureCount(); i++)
         dep(i) = para_Feature[i][0];
     f_manager.setDepth(dep);
+    if (ESTIMATE_TD)
+        td = para_Td[0][0];
 
+    // relative info between two loop frame
+    if(relocalization_info)
+    { 
+        Matrix3d relo_r;
+        Vector3d relo_t;
+        relo_r = rot_diff * Quaterniond(relo_Pose[6], relo_Pose[3], relo_Pose[4], relo_Pose[5]).normalized().toRotationMatrix();
+        relo_t = rot_diff * Vector3d(relo_Pose[0] - para_Pose[0][0],
+                                     relo_Pose[1] - para_Pose[0][1],
+                                     relo_Pose[2] - para_Pose[0][2]) + origin_P0;
+        double drift_correct_yaw;
+        drift_correct_yaw = Utility::R2ypr(prev_relo_r).x() - Utility::R2ypr(relo_r).x();
+        drift_correct_r = Utility::ypr2R(Vector3d(drift_correct_yaw, 0, 0));
+        drift_correct_t = prev_relo_t - drift_correct_r * relo_t;   
+        relo_relative_t = relo_r.transpose() * (Ps[relo_frame_local_index] - relo_t);
+        relo_relative_q = relo_r.transpose() * Rs[relo_frame_local_index];
+        relo_relative_yaw = Utility::normalizeAngle(Utility::R2ypr(Rs[relo_frame_local_index]).x() - Utility::R2ypr(relo_r).x());
+        //cout << "vins relo " << endl;
+        //cout << "vins relative_t " << relo_relative_t.transpose() << endl;
+        //cout << "vins relative_yaw " <<relo_relative_yaw << endl;
+        relocalization_info = 0;    
+
+    }
 }
 
 bool Estimator::failureDetection()
@@ -573,7 +616,7 @@ bool Estimator::failureDetection()
     if (f_manager.last_track_num < 2)
     {
         ROS_INFO(" little feature %d", f_manager.last_track_num);
-        return true;
+        //return true;
     }
     if (Bas[WINDOW_SIZE].norm() > 2.5)
     {
@@ -611,7 +654,7 @@ bool Estimator::failureDetection()
     if (delta_angle > 50)
     {
         ROS_INFO(" big delta_angle ");
-        return true;
+        //return true;
     }
     return false;
 }
@@ -640,6 +683,11 @@ void Estimator::optimization()
         }
         else
             ROS_DEBUG("estimate extinsic param");
+    }
+    if (ESTIMATE_TD)
+    {
+        problem.AddParameterBlock(para_Td[0], 1);
+        //problem.SetParameterBlockConstant(para_Td[0]);
     }
 
     TicToc t_whole, t_prepare;
@@ -683,78 +731,67 @@ void Estimator::optimization()
                 continue;
             }
             Vector3d pts_j = it_per_frame.point;
-            ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j);
-            problem.AddResidualBlock(f, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index]);
-            f_m_cnt++;
-        }
-    }
-    if(LOOP_CLOSURE)
-    {
-        //loop close factor
-        //front_pose.measurements.clear();
-        if(front_pose.header != retrive_pose_data.header)
-        {
-            front_pose = retrive_pose_data;  
-        }
-        if(!front_pose.measurements.empty())
-        {   
-            //the retrive pose is in the current window
-            if(front_pose.header >= Headers[0].stamp.toSec())
+            if (ESTIMATE_TD)
             {
-                //tmp_retrive_pose_buf.push(front_pose);
-                for(int i = 0; i < WINDOW_SIZE; i++)
-                {
-                    if(front_pose.header == Headers[i].stamp.toSec())
-                    {
-                        for (int k = 0; k < 7; k++)
-                            front_pose.loop_pose[k] = para_Pose[i][k];
-                        ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
-                        problem.AddParameterBlock(front_pose.loop_pose, SIZE_POSE, local_parameterization);
-                        loop_window_index = i;
-                        
-                        int retrive_feature_index = 0;
-                        int feature_index = -1;
-                        int loop_factor_cnt = 0;
-                        for (auto &it_per_id : f_manager.feature)
-                        {
-                            it_per_id.used_num = it_per_id.feature_per_frame.size();
-                            if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
-                                continue;
-
-                            ++feature_index;
-                            int start = it_per_id.start_frame;
-                            //feature has been obeserved in ith frame
-                            int end = (start + it_per_id.feature_per_frame.size() - i - 1);
-                            if(start <= i && end >=0)
-                            {   
-                                while(front_pose.features_ids[retrive_feature_index] < it_per_id.feature_id)
-                                {
-                                    retrive_feature_index++;
-                                }
-
-                                if(front_pose.features_ids[retrive_feature_index] == it_per_id.feature_id)
-                                {
-                                    Vector3d pts_j = Vector3d(front_pose.measurements[retrive_feature_index].x, front_pose.measurements[retrive_feature_index].y, 1.0);
-                                    Vector3d pts_i = it_per_id.feature_per_frame[0].point;
-                                    
-                                    ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j);
-                                    problem.AddResidualBlock(f, loss_function, para_Pose[start], front_pose.loop_pose, para_Ex_Pose[0], para_Feature[feature_index]);
-                                
-                                    retrive_feature_index++;
-                                    loop_factor_cnt++;
-                                }
-                                
-                            }
-                        }
-                                
-                    }
-                }
+                    ProjectionTdFactor *f_td = new ProjectionTdFactor(pts_i, pts_j, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocity,
+                                                                     it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td,
+                                                                     it_per_id.feature_per_frame[0].uv.y(), it_per_frame.uv.y());
+                    problem.AddResidualBlock(f_td, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index], para_Td[0]);
+                    /*
+                    double **para = new double *[5];
+                    para[0] = para_Pose[imu_i];
+                    para[1] = para_Pose[imu_j];
+                    para[2] = para_Ex_Pose[0];
+                    para[3] = para_Feature[feature_index];
+                    para[4] = para_Td[0];
+                    f_td->check(para);
+                    */
             }
+            else
+            {
+                ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j);
+                problem.AddResidualBlock(f, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index]);
+            }
+            f_m_cnt++;
         }
     }
 
     ROS_DEBUG("visual measurement count: %d", f_m_cnt);
     ROS_DEBUG("prepare for ceres: %f", t_prepare.toc());
+
+    if(relocalization_info)
+    {
+        //printf("set relocalization factor! \n");
+        ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
+        problem.AddParameterBlock(relo_Pose, SIZE_POSE, local_parameterization);
+        int retrive_feature_index = 0;
+        int feature_index = -1;
+        for (auto &it_per_id : f_manager.feature)
+        {
+            it_per_id.used_num = it_per_id.feature_per_frame.size();
+            if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
+                continue;
+            ++feature_index;
+            int start = it_per_id.start_frame;
+            if(start <= relo_frame_local_index)
+            {   
+                while((int)match_points[retrive_feature_index].z() < it_per_id.feature_id)
+                {
+                    retrive_feature_index++;
+                }
+                if((int)match_points[retrive_feature_index].z() == it_per_id.feature_id)
+                {
+                    Vector3d pts_j = Vector3d(match_points[retrive_feature_index].x(), match_points[retrive_feature_index].y(), 1.0);
+                    Vector3d pts_i = it_per_id.feature_per_frame[0].point;
+                    
+                    ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j);
+                    problem.AddResidualBlock(f, loss_function, para_Pose[start], relo_Pose, para_Ex_Pose[0], para_Feature[feature_index]);
+                    retrive_feature_index++;
+                }     
+            }
+        }
+
+    }
 
     ceres::Solver::Options options;
 
@@ -775,24 +812,6 @@ void Estimator::optimization()
     //cout << summary.BriefReport() << endl;
     ROS_DEBUG("Iterations : %d", static_cast<int>(summary.iterations.size()));
     ROS_DEBUG("solver costs: %f", t_solver.toc());
-
-    if(LOOP_CLOSURE)
-    { 
-        for(int i = 0; i< WINDOW_SIZE; i++)
-        {
-            if(front_pose.header == Headers[i].stamp.toSec())
-            {
-                Matrix3d Rs_i = Quaterniond(para_Pose[i][6], para_Pose[i][3], para_Pose[i][4], para_Pose[i][5]).normalized().toRotationMatrix();
-                Vector3d Ps_i = Vector3d(para_Pose[i][0], para_Pose[i][1], para_Pose[i][2]);
-                Matrix3d Rs_loop = Quaterniond(front_pose.loop_pose[6],  front_pose.loop_pose[3],  front_pose.loop_pose[4],  front_pose.loop_pose[5]).normalized().toRotationMatrix();
-                Vector3d Ps_loop = Vector3d( front_pose.loop_pose[0],  front_pose.loop_pose[1],  front_pose.loop_pose[2]);
-
-                front_pose.relative_t = Rs_loop.transpose() * (Ps_i - Ps_loop);
-                front_pose.relative_q = Rs_loop.transpose() * Rs_i;
-                front_pose.relative_yaw = Utility::normalizeAngle(Utility::R2ypr(Rs_i).x() - Utility::R2ypr(Rs_loop).x());
-            }
-        }  
-    }
 
     double2vector();
 
@@ -854,11 +873,24 @@ void Estimator::optimization()
                         continue;
 
                     Vector3d pts_j = it_per_frame.point;
-                    ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j);
-                    ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(f, loss_function,
-                                                                                   vector<double *>{para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index]},
-                                                                                   vector<int>{0, 3});
-                    marginalization_info->addResidualBlockInfo(residual_block_info);
+                    if (ESTIMATE_TD)
+                    {
+                        ProjectionTdFactor *f_td = new ProjectionTdFactor(pts_i, pts_j, it_per_id.feature_per_frame[0].velocity, it_per_frame.velocity,
+                                                                          it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td,
+                                                                          it_per_id.feature_per_frame[0].uv.y(), it_per_frame.uv.y());
+                        ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(f_td, loss_function,
+                                                                                        vector<double *>{para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index], para_Td[0]},
+                                                                                        vector<int>{0, 3});
+                        marginalization_info->addResidualBlockInfo(residual_block_info);
+                    }
+                    else
+                    {
+                        ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j);
+                        ResidualBlockInfo *residual_block_info = new ResidualBlockInfo(f, loss_function,
+                                                                                       vector<double *>{para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index]},
+                                                                                       vector<int>{0, 3});
+                        marginalization_info->addResidualBlockInfo(residual_block_info);
+                    }
                 }
             }
         }
@@ -879,7 +911,10 @@ void Estimator::optimization()
         }
         for (int i = 0; i < NUM_OF_CAM; i++)
             addr_shift[reinterpret_cast<long>(para_Ex_Pose[i])] = para_Ex_Pose[i];
-
+        if (ESTIMATE_TD)
+        {
+            addr_shift[reinterpret_cast<long>(para_Td[0])] = para_Td[0];
+        }
         vector<double *> parameter_blocks = marginalization_info->getParameterBlocks(addr_shift);
 
         if (last_marginalization_info)
@@ -942,7 +977,11 @@ void Estimator::optimization()
             }
             for (int i = 0; i < NUM_OF_CAM; i++)
                 addr_shift[reinterpret_cast<long>(para_Ex_Pose[i])] = para_Ex_Pose[i];
-
+            if (ESTIMATE_TD)
+            {
+                addr_shift[reinterpret_cast<long>(para_Td[0])] = para_Td[0];
+            }
+            
             vector<double *> parameter_blocks = marginalization_info->getParameterBlocks(addr_shift);
             if (last_marginalization_info)
                 delete last_marginalization_info;
@@ -978,6 +1017,8 @@ void Estimator::slideWindow()
                 Headers[i] = Headers[i + 1];
                 Ps[i].swap(Ps[i + 1]);
                 Vs[i].swap(Vs[i + 1]);
+                Bas[i].swap(Bas[i + 1]);
+                Bgs[i].swap(Bgs[i + 1]);
             }
             Headers[WINDOW_SIZE] = Headers[WINDOW_SIZE - 1];
             Ps[WINDOW_SIZE] = Ps[WINDOW_SIZE - 1];
@@ -1065,6 +1106,25 @@ void Estimator::slideWindowOld()
     }
     else
         f_manager.removeBack();
+}
 
+void Estimator::setReloFrame(double _frame_stamp, int _frame_index, vector<Vector3d> &_match_points, Vector3d _relo_t, Matrix3d _relo_r)
+{
+    relo_frame_stamp = _frame_stamp;
+    relo_frame_index = _frame_index;
+    match_points.clear();
+    match_points = _match_points;
+    prev_relo_t = _relo_t;
+    prev_relo_r = _relo_r;
+    for(int i = 0; i < WINDOW_SIZE; i++)
+    {
+        if(relo_frame_stamp == Headers[i].stamp.toSec())
+        {
+            relo_frame_local_index = i;
+            relocalization_info = 1;
+            for (int j = 0; j < SIZE_POSE; j++)
+                relo_Pose[j] = para_Pose[i][j];
+        }
+    }
 }
 
