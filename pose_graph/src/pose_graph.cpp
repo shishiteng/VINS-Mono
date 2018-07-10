@@ -31,6 +31,8 @@ void PoseGraph::registerPub(ros::NodeHandle &n)
     pub_pose_graph = n.advertise<visualization_msgs::MarkerArray>("pose_graph", 1000);
     for (int i = 1; i < 10; i++)
         pub_path[i] = n.advertise<nav_msgs::Path>("path_" + to_string(i), 1000);
+
+    pub_pg_odom = n.advertise<nav_msgs::Odometry>("pose_graph_odom", 1000);
 }
 
 void PoseGraph::loadVocabulary(std::string voc_path)
@@ -316,7 +318,12 @@ int PoseGraph::detectLoop(KeyFrame* keyframe, int frame_index)
     //first query; then add this frame into database!
     QueryResults ret;
     TicToc t_query;
+#if 0
     db.query(keyframe->brief_descriptors, ret, 4, frame_index - 50);
+#else
+    //db.query(keyframe->brief_descriptors, ret, 4, 50);
+    db.query(keyframe->brief_descriptors, ret, 4, frame_index - 50);
+#endif
     //printf("query time: %f", t_query.toc());
     //cout << "Searching for Image " << frame_index << ". " << ret << endl;
 
@@ -879,6 +886,11 @@ void PoseGraph::publish()
             pub_pg_path.publish(path[i]);
             pub_path[i].publish(path[i]);
             posegraph_visualization->publish_by(pub_pose_graph, path[sequence_cnt].header);
+
+            nav_msgs::Odometry odom;
+            odom.header = path[sequence_cnt].header;
+            odom.pose.pose = path[sequence_cnt].poses.back().pose;
+            pub_pg_odom.publish(odom);
         }
     }
     pub_base_path.publish(base_path);

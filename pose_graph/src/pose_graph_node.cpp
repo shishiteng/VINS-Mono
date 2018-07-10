@@ -291,6 +291,8 @@ void extrinsic_callback(const nav_msgs::Odometry::ConstPtr &pose_msg)
     m_process.unlock();
 }
 
+int n = 0;
+
 void process()
 {
     if (!LOOP_CLOSURE)
@@ -411,6 +413,7 @@ void process()
                     //printf("u %f, v %f \n", p_2d_uv.x, p_2d_uv.y);
                 }
 
+#if 1
                 KeyFrame* keyframe = new KeyFrame(pose_msg->header.stamp.toSec(), frame_index, T, R, image,
                                    point_3d, point_2d_uv, point_2d_normal, point_id, sequence);   
                 m_process.lock();
@@ -419,6 +422,18 @@ void process()
                 m_process.unlock();
                 frame_index++;
                 last_t = T;
+#else
+		if(n++ %2 == 0) {
+		  KeyFrame* keyframe = new KeyFrame(pose_msg->header.stamp.toSec(), frame_index, T, R, image,
+						    point_3d, point_2d_uv, point_2d_normal, point_id, sequence);   
+		  m_process.lock();
+		  start_flag = 1;
+		  posegraph.addKeyFrame(keyframe, 1);
+		  m_process.unlock();
+		  frame_index++;
+		  last_t = T;
+		}
+#endif
             }
         }
 
