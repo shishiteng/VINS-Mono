@@ -24,8 +24,8 @@
         <!--remap from="/pose_graph/pose_graph_odom" to="/odom"/-->
     </node>
 
-    <node name="nav_publisher" pkg="nav_publisher" type="3dto2d" output="screen">
+    <!--node name="nav_publisher" pkg="nav_publisher" type="3dto2d" output="screen">
         <remap from="/nav_publisher/odom_2d" to="/odom"/>
-    </node>
+    </node-->
 
 </launch>
