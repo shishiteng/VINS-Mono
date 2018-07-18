@@ -1,5 +1,7 @@
 #include "visualization.h"
 
+#include "std_msgs/String.h"
+
 using namespace ros;
 using namespace Eigen;
 ros::Publisher pub_odometry, pub_latest_odometry;
@@ -14,6 +16,8 @@ nav_msgs::Path path, relo_path;
 ros::Publisher pub_keyframe_pose;
 ros::Publisher pub_keyframe_point;
 ros::Publisher pub_extrinsic;
+
+ros::Publisher pub_solver_summary;
 
 CameraPoseVisualization cameraposevisual(0, 1, 0, 1);
 CameraPoseVisualization keyframebasevisual(0.0, 0.0, 1.0, 1.0);
@@ -35,6 +39,8 @@ void registerPub(ros::NodeHandle &n)
     pub_keyframe_point = n.advertise<sensor_msgs::PointCloud>("keyframe_point", 1000);
     pub_extrinsic = n.advertise<nav_msgs::Odometry>("extrinsic", 1000);
     pub_relo_relative_pose=  n.advertise<nav_msgs::Odometry>("relo_relative_pose", 1000);
+
+    pub_solver_summary = n.advertise<std_msgs::String>("solver_summary", 10);
 
     cameraposevisual.setScale(1);
     cameraposevisual.setLineWidth(0.05);
@@ -172,6 +178,23 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
               << estimator.Vs[WINDOW_SIZE].y() << ","
               << estimator.Vs[WINDOW_SIZE].z() << "," << endl;
         foutC.close();
+
+	//sst
+        char s[64] = {0};
+        sprintf(s, " %d / %d time:%.3f temination:%d ", estimator.ceres_summary.conv_count,
+                estimator.ceres_summary.solve_count,
+                estimator.ceres_summary.cost,
+                estimator.ceres_summary.termination_type);
+        string termination_type = (0 == estimator.ceres_summary.termination_type ? "CONVERGENCE" : "NO_CONVERGENCE");
+        std_msgs::String str;
+        str.data = string(s) + termination_type;//estimator.ceres_summary.report;
+        if (ESTIMATE_TD)
+        {
+            sprintf(s, " td:%4f ", estimator.td);
+            str.data = str.data + string(s);
+        }
+        pub_solver_summary.publish(str);
+
     }
 }
 

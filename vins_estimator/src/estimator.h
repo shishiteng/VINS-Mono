@@ -23,6 +23,14 @@
 #include <opencv2/core/eigen.hpp>
 
 
+typedef struct _solver_summary{
+    int termination_type;
+    int solve_count;//一共解算次数
+    int conv_count;//收敛次数//当前收敛状态
+    double cost; //耗时
+    string report;
+}solver_summary;
+
 class Estimator
 {
   public:
@@ -136,4 +144,8 @@ class Estimator
     Vector3d relo_relative_t;
     Quaterniond relo_relative_q;
     double relo_relative_yaw;
+
+    // ceres状态汇总
+    solver_summary ceres_summary;
+
 };

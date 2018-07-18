@@ -1,0 +1,15 @@
+camera_model/include/camodocal/calib
+camera_model/include/camodocal/camera_models
+camera_model/include/camodocal/chessboard
+camera_model/include/camodocal/gpl
+camera_model/include/camodocal/sparse_graph
+feature_tracker/src
+pose_graph/src
+pose_graph/src/ThirdParty/DBoW
+pose_graph/src/ThirdParty/DUtils
+pose_graph/src/ThirdParty/DVision
+pose_graph/src/utility
+vins_estimator/src
+vins_estimator/src/factor
+vins_estimator/src/initial
+vins_estimator/src/utility

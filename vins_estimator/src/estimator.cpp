@@ -815,6 +815,16 @@ void Estimator::optimization()
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
     //cout << summary.BriefReport() << endl;
+    {
+        //solver状态记录
+        ceres_summary.termination_type = summary.termination_type;
+        ceres_summary.solve_count++;
+        ceres_summary.cost = summary.total_time_in_seconds;
+        ceres_summary.report = summary.BriefReport();
+        if(summary.termination_type == ceres::CONVERGENCE)
+            ceres_summary.conv_count++;
+    }
+
     ROS_DEBUG("Iterations : %d", static_cast<int>(summary.iterations.size()));
     ROS_DEBUG("solver costs: %f", t_solver.toc());
 
