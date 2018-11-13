@@ -22,14 +22,14 @@
 #include <queue>
 #include <opencv2/core/eigen.hpp>
 
-
-typedef struct _solver_summary{
+typedef struct _solver_summary
+{
     int termination_type;
-    int solve_count;//一共解算次数
-    int conv_count;//收敛次数//当前收敛状态
-    double cost; //耗时
+    int solve_count; //一共解算次数
+    int conv_count;  //收敛次数//当前收敛状态
+    double cost;     //耗时
     string report;
-}solver_summary;
+} solver_summary;
 
 class Estimator
 {
@@ -57,7 +57,6 @@ class Estimator
     void double2vector();
     bool failureDetection();
 
-
     enum SolverFlag
     {
         INITIAL,
@@ -71,7 +70,7 @@ class Estimator
     };
 
     SolverFlag solver_flag;
-    MarginalizationFlag  marginalization_flag;
+    MarginalizationFlag marginalization_flag;
     Vector3d g;
     MatrixXd Ap[2], backup_A;
     VectorXd bp[2], backup_b;
@@ -113,7 +112,6 @@ class Estimator
     vector<Vector3d> key_poses;
     double initial_timestamp;
 
-
     double para_Pose[WINDOW_SIZE + 1][SIZE_POSE];
     double para_SpeedBias[WINDOW_SIZE + 1][SIZE_SPEEDBIAS];
     double para_Feature[NUM_OF_F][SIZE_FEATURE];
@@ -148,4 +146,8 @@ class Estimator
     // ceres状态汇总
     solver_summary ceres_summary;
 
+    // 用来剔除静态outlier
+    Vector3d Ps_prev;
+    Matrix3d Rs_prev;
+    map<int, vector<pair<int, Eigen::Matrix<double, 7, 1>>>> prev_points;
 };

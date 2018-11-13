@@ -141,6 +141,9 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
         odometry.twist.twist.linear.z = estimator.Vs[WINDOW_SIZE].z();
         pub_odometry.publish(odometry);
 
+        //
+        //std::cout<<Utility::R2ypr(tmp_Q.toRotationMatrix()).transpose()<<std::endl;
+
         geometry_msgs::PoseStamped pose_stamped;
         pose_stamped.header = header;
         pose_stamped.header.frame_id = "world";
