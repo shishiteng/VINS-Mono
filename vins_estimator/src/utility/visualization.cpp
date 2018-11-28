@@ -177,11 +177,12 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
         Vector3d Pcw = estimator.Ps[i] + estimator.Rs[i] * estimator.tic[0];
         Quaterniond Rcw = Quaterniond(estimator.Rs[i] * estimator.ric[0]);
 
+        // 100t8
         Eigen::Matrix3d Rlc;
-        Rlc << -0.0155059, -0.999011, 0.0412937,
-            0.0581758, -0.0421301, -0.997431,
-            0.998158, -0.0130781, 0.0587613;
-        Eigen::Vector3d Tlc(-0.0518726, -0.100546, -0.172796);
+        Rlc << -0.0699071, -0.9975469, -0.0003885,
+            -0.0325069, 0.0026670, -0.9994679,
+            0.9970155, -0.0698556, -0.0326136;
+        Eigen::Vector3d Tlc(0.0490796, 0.1054715, -0.0237467);
         Vector3d Plw = Pcw + Rcw * Tlc;
         Quaterniond Rlw = Quaterniond(Rcw * Rlc);
 

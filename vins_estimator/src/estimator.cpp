@@ -107,7 +107,7 @@ void Estimator::processIMU(double dt, const Vector3d &linear_acceleration, const
         int j = frame_count;
         Vector3d un_acc_0 = Rs[j] * (acc_0 - Bas[j]) - g;
         Vector3d un_gyr = 0.5 * (gyr_0 + angular_velocity) - Bgs[j];
-        Rs[j] *= Utility::deltaQ(un_gyr * dt).toRotationMatrix();
+        Rs[j] *= Utility::deltaQ(un_gyr * dt).toRotationMatrix(); //Eigen::Matrix运算符：(a*=b is equivalent to a = a*b)
         Vector3d un_acc_1 = Rs[j] * (linear_acceleration - Bas[j]) - g;
         Vector3d un_acc = 0.5 * (un_acc_0 + un_acc_1);
         Ps[j] += dt * Vs[j] + 0.5 * dt * dt * un_acc;
@@ -148,7 +148,7 @@ void Estimator::processImage(const map<int, vector<pair<int, Eigen::Matrix<doubl
         double delta_pos = sqrt(pow(delta_p[0], 2) + pow(delta_p[1], 2) + pow(delta_p[2], 2));
         //cout << " imu velocity:"<< Vs[frame_count].transpose() << " |" <<norm_vel<<"  |" <<norm_pos<<endl;
         //fflush(stderr);
-        fprintf(stderr,"  %.2fcm, %.2f°\n",delta_pos*100,delta_angle);
+        //fprintf(stderr,"  %.2fcm, %.2f°\n",delta_pos*100,delta_angle);
         if (delta_pos < 0.001 && delta_angle < 0.05) // 1mm && 0.05度
         {
             ROS_DEBUG("robot is still,delta_pos=%.2fcm, delta_angle%.2f°", delta_pos * 100, delta_angle);
