@@ -37,62 +37,7 @@ Mat dist_coeff_;
 Eigen::Matrix4f camera_to_lidar_;
 double v_fov_;
 
-ros::Publisher pub_projection_image_, pub_debug_image_;
-
-void ProjectScan2Image(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
-                       const sensor_msgs::PointCloudConstPtr feature_points,
-                       Mat image,
-                       Eigen::Matrix4f c2l)
-{
-    Eigen::Matrix4f l2c = c2l.inverse();
-    // cout << " l2c:\n"
-    //      << l2c << endl;
-
-    //printf("lidar points:%d\n", lidar_points->points.size());
-
-    vector<Point2f> image_points;
-    vector<Point3f> all_points;
-    for (auto &pt : lidar_points->points)
-    {
-        double theta = atan(pt.y / (pt.x == 0 ? 1e-5 : pt.x)) * 57.3;
-        if (pt.x > 0 && abs(theta) < v_fov_ / 2.f)
-        {
-            Eigen::Vector4f pt_l(pt.x, pt.y, pt.z, 1);
-            Eigen::Vector4f pt_c = l2c * pt_l;
-            all_points.push_back(Point3f(pt_c[0], pt_c[1], pt_c[2]));
-        }
-    }
-
-    double zero_data[3] = {0};
-    Mat rvec(3, 1, cv::DataType<double>::type, zero_data);
-    Mat tvec(3, 1, cv::DataType<double>::type, zero_data);
-    projectPoints(all_points, rvec, tvec, cam_matrix_, dist_coeff_, image_points);
-
-    Mat draw_img(image.size(), CV_8UC3);
-    cvtColor(image, draw_img, CV_GRAY2BGR);
-    for (auto &pt : image_points)
-    {
-        circle(draw_img, pt, 1, Scalar(255, 255, 0), -1);
-    }
-
-    for (unsigned int i = 0; i < feature_points->points.size(); i++)
-    {
-        double x = feature_points->points[i].x;
-        double y = feature_points->points[i].y;
-        double z = feature_points->points[i].z;
-        double p_u = feature_points->channels[1].values[i];
-        double p_v = feature_points->channels[2].values[i];
-        double velocity_x = feature_points->channels[3].values[i];
-        double velocity_y = feature_points->channels[4].values[i];
-
-        circle(draw_img, cv::Point2f(p_u, p_v), 1, Scalar(0, 255, 0), 3);
-    }
-
-    //发布debug图像
-    std_msgs::Header header;
-    cv_bridge::CvImage projected_image(header, "bgr8", draw_img);
-    pub_projection_image_.publish(projected_image.toImageMsg());
-}
+ros::Publisher pub_projection_image_, pub_debug_image_, pub_xfeature_;
 
 void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
                      const sensor_msgs::PointCloudConstPtr feature_points,
@@ -123,8 +68,8 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
     cvtColor(image, draw_img, CV_GRAY2BGR);
 
     // 建立索引与点深度的映射
-    map<int, vector<double>> map_points;
-    for (int i = 0; i < image_points.size(); i++)
+    map<int, vector<float>> map_points;
+    for (unsigned int i = 0; i < image_points.size(); i++)
     {
         cv::Point2f pt = image_points[i];
         cv::Point3f pt2 = all_points[i];
@@ -132,26 +77,35 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
         circle(draw_img, pt, 1, Scalar(255, 255, 0), -1);
 
         int index = (int)pt.y * image.cols + (int)pt.x;
-        map<int, vector<double>>::iterator iter = map_points.find(index);
-        vector<double> v;
+        map<int, vector<float>>::iterator iter = map_points.find(index);
+        vector<float> v;
         if (iter != map_points.end())
             v = iter->second;
         v.push_back(sqrt(pt2.x * pt2.x + pt2.y * pt2.y + pt2.z * pt2.z));
-        map_points.insert(pair<int, vector<double>>(index, v));
+        map_points.insert(pair<int, vector<float>>(index, v));
     }
+
+    sensor_msgs::PointCloudPtr xfeature_points(new sensor_msgs::PointCloud);
+    xfeature_points->header = feature_points->header;
+    xfeature_points->header.frame_id = "world";
+    sensor_msgs::ChannelFloat32 id_of_point;
+    sensor_msgs::ChannelFloat32 u_of_point;
+    sensor_msgs::ChannelFloat32 v_of_point;
+    sensor_msgs::ChannelFloat32 velocity_x_of_point;
+    sensor_msgs::ChannelFloat32 velocity_y_of_point;
 
     for (unsigned int i = 0; i < feature_points->points.size(); i++)
     {
-        double x = feature_points->points[i].x;
-        double y = feature_points->points[i].y;
-        double z = feature_points->points[i].z;
-        double p_u = feature_points->channels[1].values[i];
-        double p_v = feature_points->channels[2].values[i];
-        double velocity_x = feature_points->channels[3].values[i];
-        double velocity_y = feature_points->channels[4].values[i];
+        float x = feature_points->points[i].x;
+        float y = feature_points->points[i].y;
+        float z = feature_points->points[i].z;
+        float id = feature_points->channels[0].values[i];
+        float p_u = feature_points->channels[1].values[i];
+        float p_v = feature_points->channels[2].values[i];
+        float velocity_x = feature_points->channels[3].values[i];
+        float velocity_y = feature_points->channels[4].values[i];
 
-        int index = (int)p_v * image.cols + (int)p_u;
-        double depth = 0.0;
+        float depth = 0.0;
         int n = 0;
         int w = 2; //窗口大小
         //ComputeMeanDepth;
@@ -159,11 +113,11 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
             for (int j = int(p_v - w); j > 1 && j <= int(p_v + w) && j < image.rows; j++)
             {
                 int index = j * image.cols + i;
-                map<int, vector<double>>::iterator iter = map_points.find(index);
+                map<int, vector<float>>::iterator iter = map_points.find(index);
                 if (iter != map_points.end())
                 {
-                    vector<double> v = iter->second;
-                    for (int m = 0; m < v.size(); m++)
+                    vector<float> v = iter->second;
+                    for (unsigned int m = 0; m < v.size(); m++)
                     {
                         depth += v[m];
                         n++;
@@ -172,14 +126,36 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
             }
 
         circle(draw_img, cv::Point2f(p_u, p_v), 1, Scalar(0, 255, 0), 3);
-        if (depth > 0.1)
+
+        // 更新点的深度
+        if (depth > 1.0)
         {
+            z = depth;
             circle(draw_img, cv::Point2f(p_u, p_v), 1, Scalar(0, 0, 255), 3);
             char text[10];
             sprintf(text, "%.1f", depth / n);
             cv::putText(draw_img, text, cv::Point2f(p_u, p_v), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 255));
         }
+
+        geometry_msgs::Point32 p;
+        p.x = x;
+        p.y = y;
+        p.z = z;
+        xfeature_points->points.push_back(p);
+        id_of_point.values.push_back(id);
+        u_of_point.values.push_back(p_u);
+        v_of_point.values.push_back(p_v);
+        velocity_x_of_point.values.push_back(velocity_x);
+        velocity_y_of_point.values.push_back(velocity_y);
     }
+
+    // 发布增强后的features
+    xfeature_points->channels.push_back(id_of_point);
+    xfeature_points->channels.push_back(u_of_point);
+    xfeature_points->channels.push_back(v_of_point);
+    xfeature_points->channels.push_back(velocity_x_of_point);
+    xfeature_points->channels.push_back(velocity_y_of_point);
+    pub_xfeature_.publish(xfeature_points);
 
     //发布debug图像
     std_msgs::Header header;
@@ -215,9 +191,6 @@ void Callback(const sensor_msgs::ImageConstPtr &img_msg,
     pcl::fromROSMsg(*points_msg.get(), *lidar_points.get());
 
     //
-    //ProjectScan2Image(lidar_points, feature_msg, image, camera_to_lidar_);
-
-    //
     EnhanceFeatures(lidar_points, feature_msg, image, camera_to_lidar_);
 }
 
@@ -249,6 +222,7 @@ int main(int argc, char **argv)
 
     pub_debug_image_ = nh.advertise<sensor_msgs::Image>("/debug_image", 1);
     pub_projection_image_ = nh.advertise<sensor_msgs::Image>("/projection_image", 1); //lidar点云投影到图像上
+    pub_xfeature_ = nh.advertise<sensor_msgs::PointCloud>("/xfeature", 10);
 
     message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, "/cam0/image_raw", 10);
     message_filters::Subscriber<sensor_msgs::PointCloud> features_sub(nh, "/feature_tracker/feature", 10);
