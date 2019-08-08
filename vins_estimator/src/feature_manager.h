@@ -86,6 +86,7 @@ public:
   void clearDepth(const VectorXd &x);
   VectorXd getDepthVector();
   void triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[]);
+  void triangulateWithDepth(Vector3d Ps[], Vector3d tic[], Matrix3d ric[]);
   void removeBackShiftDepth(Eigen::Matrix3d marg_R, Eigen::Vector3d marg_P, Eigen::Matrix3d new_R, Eigen::Vector3d new_P);
   void removeBack();
   void removeFront(int frame_count);

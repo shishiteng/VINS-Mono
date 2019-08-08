@@ -37,7 +37,7 @@ Mat dist_coeff_;
 Eigen::Matrix4f camera_to_lidar_;
 double v_fov_;
 
-ros::Publisher pub_projection_image_, pub_debug_image_, pub_xfeature_;
+ros::Publisher pub_projection_image_, pub_debug_image_, pub_xfeature_, pub_xpoints_;
 
 void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
                      const sensor_msgs::PointCloudConstPtr feature_points,
@@ -68,6 +68,7 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
     cvtColor(image, draw_img, CV_GRAY2BGR);
 
     // 建立索引与点深度的映射
+    pcl::PointCloud<pcl::PointXYZI>::Ptr indesity_points(new pcl::PointCloud<pcl::PointXYZI>);
     map<int, vector<float>> map_points;
     for (unsigned int i = 0; i < image_points.size(); i++)
     {
@@ -83,7 +84,26 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
             v = iter->second;
         v.push_back(sqrt(pt2.x * pt2.x + pt2.y * pt2.y + pt2.z * pt2.z));
         map_points.insert(pair<int, vector<float>>(index, v));
+
+        // 灰度点云
+        pcl::PointXYZI p;
+        p.z = pt2.x;
+        p.x = pt2.y;
+        p.y = pt2.z;
+        p.intensity = image.ptr<uchar>((int)pt.x)[(int)pt.y];
+
+        // 把p加入到点云中
+        indesity_points->points.push_back(p);
     }
+
+    indesity_points->header = lidar_points->header;
+    indesity_points->header.frame_id = "world";
+    indesity_points->height = 1;
+    indesity_points->width = indesity_points->points.size();
+    indesity_points->is_dense = false;
+    sensor_msgs::PointCloud2 output;
+    pcl::toROSMsg(*indesity_points.get(), output);
+    pub_xpoints_.publish(output);
 
     sensor_msgs::PointCloudPtr xfeature_points(new sensor_msgs::PointCloud);
     xfeature_points->header = feature_points->header;
@@ -223,6 +243,7 @@ int main(int argc, char **argv)
     pub_debug_image_ = nh.advertise<sensor_msgs::Image>("/debug_image", 1);
     pub_projection_image_ = nh.advertise<sensor_msgs::Image>("/projection_image", 1); //lidar点云投影到图像上
     pub_xfeature_ = nh.advertise<sensor_msgs::PointCloud>("/xfeature", 10);
+    pub_xpoints_ = nh.advertise<sensor_msgs::PointCloud2>("/xpoints", 10);
 
     message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, "/cam0/image_raw", 10);
     message_filters::Subscriber<sensor_msgs::PointCloud> features_sub(nh, "/feature_tracker/feature", 10);
