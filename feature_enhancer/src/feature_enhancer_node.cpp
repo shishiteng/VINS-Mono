@@ -37,7 +37,7 @@ Mat dist_coeff_;
 Eigen::Matrix4f camera_to_lidar_;
 double v_fov_;
 
-ros::Publisher pub_projection_image_, pub_debug_image_, pub_xfeature_, pub_xpoints_;
+ros::Publisher pub_projection_image_, pub_debug_image_, pub_xfeature_, pub_xpoints_,pub_xpoints_cut_;
 
 void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
                      const sensor_msgs::PointCloudConstPtr feature_points,
@@ -46,24 +46,41 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
 {
     Eigen::Matrix4f l2c = c2l.inverse();
 
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cut_points(new pcl::PointCloud<pcl::PointXYZ>);
+    cut_points->header = lidar_points->header;
+
     vector<Point2f> image_points;
     vector<Point3f> all_points;
     for (auto &pt : lidar_points->points)
     {
-        double theta = atan(pt.y / (pt.x == 0 ? 1e-5 : pt.x)) * 57.3;
-        if (pt.x > 0 && abs(theta) < v_fov_ / 2.f)
+	if(pt.x <= 0)
+	    continue;
+
+        Eigen::Vector4f pt_l(pt.x, pt.y, pt.z, 1);
+        Eigen::Vector4f pt_c = l2c * pt_l;
+
+        double theta = atan(pt_c[0] / (pt_c[2] == 0 ? 1e-5 : pt_c[2])) * 57.3;
+        if (pt_c[2] > 0 && abs(theta) < v_fov_ / 2.f)
         {
-            Eigen::Vector4f pt_l(pt.x, pt.y, pt.z, 1);
-            Eigen::Vector4f pt_c = l2c * pt_l;
             all_points.push_back(Point3f(pt_c[0], pt_c[1], pt_c[2]));
+
+	    pcl::PointXYZ p;
+            p.z = pt_c[0];
+            p.x = pt_c[1];
+            p.y = pt_c[2];
+            cut_points->points.push_back(p);
         }
     }
-
+    cut_points->height = 1;
+    cut_points->width = cut_points->points.size();
+    sensor_msgs::PointCloud2 outputss;
+    pcl::toROSMsg(*cut_points.get(), outputss);
+    pub_xpoints_cut_.publish(outputss);
+ 
     double zero_data[3] = {0};
     Mat rvec(3, 1, cv::DataType<double>::type, zero_data);
     Mat tvec(3, 1, cv::DataType<double>::type, zero_data);
     projectPoints(all_points, rvec, tvec, cam_matrix_, dist_coeff_, image_points);
-
     Mat draw_img(image.size(), CV_8UC3);
     cvtColor(image, draw_img, CV_GRAY2BGR);
 
@@ -74,7 +91,6 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
     {
         cv::Point2f pt = image_points[i];
         cv::Point3f pt2 = all_points[i];
-
         circle(draw_img, pt, 1, Scalar(255, 255, 0), -1);
 
         int index = (int)pt.y * image.cols + (int)pt.x;
@@ -95,7 +111,6 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
         // 把p加入到点云中
         indesity_points->points.push_back(p);
     }
-
     indesity_points->header = lidar_points->header;
     indesity_points->header.frame_id = "world";
     indesity_points->height = 1;
@@ -244,6 +259,7 @@ int main(int argc, char **argv)
     pub_projection_image_ = nh.advertise<sensor_msgs::Image>("/projection_image", 1); //lidar点云投影到图像上
     pub_xfeature_ = nh.advertise<sensor_msgs::PointCloud>("/xfeature", 10);
     pub_xpoints_ = nh.advertise<sensor_msgs::PointCloud2>("/xpoints", 10);
+    pub_xpoints_cut_ = nh.advertise<sensor_msgs::PointCloud2>("/sync_scan_cloud_filtered", 10);
 
     message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, "/cam0/image_raw", 10);
     message_filters::Subscriber<sensor_msgs::PointCloud> features_sub(nh, "/feature_tracker/feature", 10);
