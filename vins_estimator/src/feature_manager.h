@@ -53,6 +53,7 @@ public:
   bool is_margin;
   double estimated_depth;
   int solve_flag; // 0 haven't solve yet; 1 solve succ; 2 solve fail;
+  double measured_depth;
 
   Vector3d gt_p;
 

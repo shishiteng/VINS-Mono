@@ -416,6 +416,7 @@ bool Estimator::visualInitialAlign()
         TIC_TMP[i].setZero();
     ric[0] = RIC[0];
     f_manager.setRic(ric);
+    f_manager.triangulateWithDepth(Ps, &(TIC_TMP[0]), &(RIC[0]));
     f_manager.triangulate(Ps, &(TIC_TMP[0]), &(RIC[0]));
 
     double s = (x.tail<1>())(0);
@@ -770,6 +771,8 @@ void Estimator::optimization()
                                                                   it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td,
                                                                   it_per_id.feature_per_frame[0].uv.y(), it_per_frame.uv.y());
                 problem.AddResidualBlock(f_td, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index], para_Td[0]);
+                if (it_per_id.measured_depth > 1.0)
+                    problem.SetParameterBlockConstant(para_Feature[feature_index]);
                 /*
                     double **para = new double *[5];
                     para[0] = para_Pose[imu_i];
@@ -784,6 +787,8 @@ void Estimator::optimization()
             {
                 ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j);
                 problem.AddResidualBlock(f, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index]);
+                // if (it_per_id.measured_depth > 1.0)
+                //     problem.SetParameterBlockConstant(para_Feature[feature_index]);
             }
             f_m_cnt++;
         }

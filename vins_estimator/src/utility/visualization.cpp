@@ -28,6 +28,8 @@ CameraPoseVisualization keyframebasevisual(0.0, 0.0, 1.0, 1.0);
 static double sum_of_path = 0;
 static Vector3d last_path(0.0, 0.0, 0.0);
 
+static double distance_ = 0.0;
+
 void registerPub(ros::NodeHandle &n)
 {
     pub_latest_odometry = n.advertise<nav_msgs::Odometry>("imu_propagate", 1000);
@@ -79,7 +81,7 @@ void printStatistics(const Estimator &estimator, double t)
 {
     if (estimator.solver_flag != Estimator::SolverFlag::NON_LINEAR)
         return;
-    printf("position: %f, %f, %f\r", estimator.Ps[WINDOW_SIZE].x(), estimator.Ps[WINDOW_SIZE].y(), estimator.Ps[WINDOW_SIZE].z());
+    //printf("position: %f, %f, %f distance: %.1f \r", estimator.Ps[WINDOW_SIZE].x(), estimator.Ps[WINDOW_SIZE].y(), estimator.Ps[WINDOW_SIZE].z(), distance_);
     ROS_DEBUG_STREAM("position: " << estimator.Ps[WINDOW_SIZE].transpose());
     ROS_DEBUG_STREAM("orientation: " << estimator.Vs[WINDOW_SIZE].transpose());
     for (int i = 0; i < NUM_OF_CAM; i++)
@@ -152,6 +154,14 @@ void pubOdometry(const Estimator &estimator, const std_msgs::Header &header)
         path.header.frame_id = "world";
         path.poses.push_back(pose_stamped);
         pub_path.publish(path);
+
+        distance_ = 0;
+        for (size_t i = 1; i < path.poses.size(); ++i)
+        {
+            distance_ += std::sqrt(pow(path.poses[i].pose.position.x - path.poses[i - 1].pose.position.x, 2) +
+                                  pow(path.poses[i].pose.position.y - path.poses[i - 1].pose.position.y, 2) +
+                                  pow(path.poses[i].pose.position.z - path.poses[i - 1].pose.position.z, 2));
+        }
 
         Vector3d correct_t;
         Vector3d correct_v;
