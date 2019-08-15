@@ -254,7 +254,7 @@ void FeatureManager::triangulateWithDepth(Vector3d Ps[], Vector3d tic[], Matrix3
                 Eigen::Vector2d fi_projected(fi[0] / fi[2], fi[1] / fi[2]);
                 Eigen::Vector2d residual(it_per_id.feature_per_frame[imu_i].point.x() - fi_projected[0],
                                          it_per_id.feature_per_frame[imu_i].point.y() - fi_projected[1]);
-                if (residual.norm() < 10.0 / 460)
+                //if (residual.norm() < 10.0 / 460)
                 { //this can also be adjust to improve performance
                     it_per_id.measured_depth = sqrt(fi[0] * fi[0] + fi[1] * fi[1] + fi[2] * fi[2]);
                     sum_depth += it_per_id.measured_depth;
@@ -305,13 +305,15 @@ void FeatureManager::triangulateWithDepth(Vector3d Ps[], Vector3d tic[], Matrix3
 
             //break;
         }
-        it_per_id.estimated_depth = sum_depth / count;
+        if (sum_depth > 0)
+            it_per_id.estimated_depth = sum_depth / count;
+        // else
+        //     it_per_id.estimated_depth = INIT_DEPTH;
     }
 }
 
 void FeatureManager::triangulate(Vector3d Ps[], Vector3d tic[], Matrix3d ric[])
 {
-    // return;
     for (auto &it_per_id : feature)
     {
         it_per_id.used_num = it_per_id.feature_per_frame.size();

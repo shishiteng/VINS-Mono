@@ -416,7 +416,7 @@ bool Estimator::visualInitialAlign()
         TIC_TMP[i].setZero();
     ric[0] = RIC[0];
     f_manager.setRic(ric);
-    f_manager.triangulateWithDepth(Ps, &(TIC_TMP[0]), &(RIC[0]));
+    //f_manager.triangulateWithDepth(Ps, &(TIC_TMP[0]), &(RIC[0]));
     f_manager.triangulate(Ps, &(TIC_TMP[0]), &(RIC[0]));
 
     double s = (x.tail<1>())(0);
@@ -436,6 +436,8 @@ bool Estimator::visualInitialAlign()
             Vs[kv] = frame_i->second.R * x.segment<3>(kv * 3);
         }
     }
+
+    // 有激光雷达做深度增强，这里的深度不需要乘以尺度s了
     for (auto &it_per_id : f_manager.feature)
     {
         it_per_id.used_num = it_per_id.feature_per_frame.size();
@@ -743,6 +745,10 @@ void Estimator::optimization()
         IMUFactor *imu_factor = new IMUFactor(pre_integrations[j]);
         problem.AddResidualBlock(imu_factor, NULL, para_Pose[i], para_SpeedBias[i], para_Pose[j], para_SpeedBias[j]);
     }
+
+    int n_const = 0;
+    int n = 0;
+
     int f_m_cnt = 0;
     int feature_index = -1;
     for (auto &it_per_id : f_manager.feature)
@@ -772,7 +778,10 @@ void Estimator::optimization()
                                                                   it_per_id.feature_per_frame[0].uv.y(), it_per_frame.uv.y());
                 problem.AddResidualBlock(f_td, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index], para_Td[0]);
                 if (it_per_id.measured_depth > 1.0)
+                {
                     problem.SetParameterBlockConstant(para_Feature[feature_index]);
+                }
+
                 /*
                     double **para = new double *[5];
                     para[0] = para_Pose[imu_i];
@@ -793,6 +802,8 @@ void Estimator::optimization()
             f_m_cnt++;
         }
     }
+
+    // fprintf(stderr, "non_depth_features: %d / %d\n", n_const, n);
 
     ROS_DEBUG("visual measurement count: %d", f_m_cnt);
     ROS_DEBUG("prepare for ceres: %f", t_prepare.toc());
@@ -847,6 +858,7 @@ void Estimator::optimization()
     ceres::Solver::Summary summary;
     ceres::Solve(options, &problem, &summary);
     //cout << summary.BriefReport() << endl;
+    //cout << summary.FullReport() << endl;
     {
         //solver状态记录
         ceres_summary.termination_type = summary.termination_type;

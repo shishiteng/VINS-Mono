@@ -37,7 +37,7 @@ Mat dist_coeff_;
 Eigen::Matrix4f camera_to_lidar_;
 double v_fov_;
 
-ros::Publisher pub_projection_image_, pub_debug_image_, pub_xfeature_, pub_xpoints_,pub_xpoints_cut_;
+ros::Publisher pub_projection_image_, pub_debug_image_, pub_xfeature_, pub_xpoints_, pub_xpoints_cut_;
 
 void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
                      const sensor_msgs::PointCloudConstPtr feature_points,
@@ -53,8 +53,8 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
     vector<Point3f> all_points;
     for (auto &pt : lidar_points->points)
     {
-	if(pt.x <= 0)
-	    continue;
+        if (pt.x <= 0)
+            continue;
 
         Eigen::Vector4f pt_l(pt.x, pt.y, pt.z, 1);
         Eigen::Vector4f pt_c = l2c * pt_l;
@@ -64,7 +64,7 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
         {
             all_points.push_back(Point3f(pt_c[0], pt_c[1], pt_c[2]));
 
-	    pcl::PointXYZ p;
+            pcl::PointXYZ p;
             p.z = pt_c[0];
             p.x = pt_c[1];
             p.y = pt_c[2];
@@ -76,7 +76,7 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
     sensor_msgs::PointCloud2 outputss;
     pcl::toROSMsg(*cut_points.get(), outputss);
     pub_xpoints_cut_.publish(outputss);
- 
+
     double zero_data[3] = {0};
     Mat rvec(3, 1, cv::DataType<double>::type, zero_data);
     Mat tvec(3, 1, cv::DataType<double>::type, zero_data);
@@ -196,6 +196,9 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
     std_msgs::Header header;
     cv_bridge::CvImage projected_image(header, "bgr8", draw_img);
     pub_projection_image_.publish(projected_image.toImageMsg());
+
+    imshow("debug", draw_img);
+    waitKey(3);
 }
 
 void Callback(const sensor_msgs::ImageConstPtr &img_msg,
