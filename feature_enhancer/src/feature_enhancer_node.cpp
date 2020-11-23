@@ -142,7 +142,7 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr lidar_points,
 
         float depth = 0.0;
         int n = 0;
-        int w = 2; //窗口大小
+        int w = 0; //窗口大小
         //ComputeMeanDepth;
         for (int i = int(p_u - w); i > 1 && i <= int(p_u + w) && i < image.cols; i++)
             for (int j = int(p_v - w); j > 1 && j <= int(p_v + w) && j < image.rows; j++)

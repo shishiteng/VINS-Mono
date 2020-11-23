@@ -777,10 +777,12 @@ void Estimator::optimization()
                                                                   it_per_id.feature_per_frame[0].cur_td, it_per_frame.cur_td,
                                                                   it_per_id.feature_per_frame[0].uv.y(), it_per_frame.uv.y());
                 problem.AddResidualBlock(f_td, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index], para_Td[0]);
-                if (it_per_id.measured_depth > 1.0)
+                if (it_per_id.depth_flag)
                 {
+                    n_const++;
                     problem.SetParameterBlockConstant(para_Feature[feature_index]);
                 }
+                n++;
 
                 /*
                     double **para = new double *[5];
@@ -796,14 +798,14 @@ void Estimator::optimization()
             {
                 ProjectionFactor *f = new ProjectionFactor(pts_i, pts_j);
                 problem.AddResidualBlock(f, loss_function, para_Pose[imu_i], para_Pose[imu_j], para_Ex_Pose[0], para_Feature[feature_index]);
-                // if (it_per_id.measured_depth > 1.0)
+                // if (it_per_id.depth_flag)
                 //     problem.SetParameterBlockConstant(para_Feature[feature_index]);
             }
             f_m_cnt++;
         }
     }
 
-    // fprintf(stderr, "non_depth_features: %d / %d\n", n_const, n);
+    fprintf(stderr, "measure_depth_features: %d / %d\n", n_const, n);
 
     ROS_DEBUG("visual measurement count: %d", f_m_cnt);
     ROS_DEBUG("prepare for ceres: %f", t_prepare.toc());

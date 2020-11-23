@@ -28,6 +28,7 @@ public:
     velocity.x() = _point(5);
     velocity.y() = _point(6);
     cur_td = td;
+    measured_depth = _point(2);
   }
   double cur_td;
   Vector3d point;
@@ -39,6 +40,7 @@ public:
   MatrixXd A;
   VectorXd b;
   double dep_gradient;
+  double measured_depth;
 };
 
 class FeaturePerId
@@ -53,13 +55,13 @@ public:
   bool is_margin;
   double estimated_depth;
   int solve_flag; // 0 haven't solve yet; 1 solve succ; 2 solve fail;
-  double measured_depth;
+  int depth_flag;
 
   Vector3d gt_p;
 
   FeaturePerId(int _feature_id, int _start_frame)
       : feature_id(_feature_id), start_frame(_start_frame),
-        used_num(0), estimated_depth(-1.0), solve_flag(0)
+        used_num(0), estimated_depth(-1.0), solve_flag(0), depth_flag(0)
   {
   }
 

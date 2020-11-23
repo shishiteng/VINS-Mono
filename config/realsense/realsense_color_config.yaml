@@ -1,7 +1,7 @@
 %YAML:1.0
 
 #common parameters
-imu_topic: "/camera/imu/data_raw"
+imu_topic: "/camera/imu"
 image_topic: "/camera/color/image_raw"
 output_path: "/home/tony-ws1/output/"
 
@@ -11,18 +11,18 @@ camera_name: camera
 image_width: 640
 image_height: 480
 distortion_parameters:
-   k1: 9.2615504465028850e-02
-   k2: -1.8082438825995681e-01
-   p1: -6.5484100374765971e-04
-   p2: -3.5829351558557421e-04
+   k1: 0.20442609178644636  
+   k2: -0.4276452793862582
+   p1: -0.0005096538517844895
+   p2: -0.0015548694806005862
 projection_parameters:
-   fx: 6.0970550296798035e+02
-   fy: 6.0909579671294716e+02
-   cx: 3.1916667152289227e+02
-   cy: 2.3558360480225772e+02
+   fx: 617.2996342744858
+   fy: 621.6632590111969
+   cx: 317.7881011733047
+   cy: 239.7894671795975 
 
 # Extrinsic parameter between IMU and Camera.
-estimate_extrinsic: 0   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
+estimate_extrinsic: 1   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
                         # 1  Have an initial guess about extrinsic parameters. We will optimize around your initial guess.
                         # 2  Don't know anything about extrinsic parameters. You don't need to give R,T. We will try to calibrate it. Do some rotation movement at beginning.                        
 #If you choose 0 or 1, you should write down the following matrix.
@@ -42,7 +42,7 @@ extrinsicTranslation: !!opencv-matrix
    data: [0.07494282, -0.01077138, -0.00641822]
 
 #feature traker paprameters
-max_cnt: 150            # max feature number in feature tracking
+max_cnt: 200            # max feature number in feature tracking
 min_dist: 25            # min distance between two features 
 freq: 10                # frequence (Hz) of publish tracking result. At least 10Hz for good estimation. If set 0, the frequence will be same as raw image 
 F_threshold: 1.0        # ransac threshold (pixel)
@@ -56,9 +56,9 @@ max_num_iterations: 8   # max solver itrations, to guarantee real time
 keyframe_parallax: 10.0 # keyframe selection threshold (pixel)
 
 #imu parameters       The more accurate parameters you provide, the better performance
-acc_n: 0.1          # accelerometer measurement noise standard deviation. #0.2
-gyr_n: 0.01         # gyroscope measurement noise standard deviation.     #0.05
-acc_w: 0.0002         # accelerometer bias random work noise standard deviation.  #0.02
+acc_n: 0.2         # accelerometer measurement noise standard deviation. #0.2
+gyr_n: 0.002         # gyroscope measurement noise standard deviation.     #0.05
+acc_w: 0.02         # accelerometer bias random work noise standard deviation.  #0.02
 gyr_w: 2.0e-5       # gyroscope bias random work noise standard deviation.     #4.0e-5
 g_norm: 9.805       # gravity magnitude
 
@@ -70,7 +70,7 @@ pose_graph_save_path: "/home/tony-ws1/output/pose_graph/" # save and load path
 
 #unsynchronization parameters
 estimate_td: 1                      # online estimate time offset between camera and imu
-td: 0.000                           # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+td: 0.025                           # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
 
 #rolling shutter parameters
 rolling_shutter: 1                      # 0: global shutter camera, 1: rolling shutter camera

@@ -67,6 +67,12 @@ bool FeatureManager::addFeatureCheckParallax(int frame_count, const map<int, vec
             it->feature_per_frame.push_back(f_per_fra);
             last_track_num++;
         }
+
+        // depth measured points
+        if (f_per_fra.measured_depth > 1.0)
+        {
+            it->depth_flag = 1;
+        }
     }
 
     if (frame_count < 2 || last_track_num < 20)
@@ -205,12 +211,13 @@ void FeatureManager::triangulateWithDepth(Vector3d Ps[], Vector3d tic[], Matrix3
         if (!(it_per_id.used_num >= 2 && it_per_id.start_frame < WINDOW_SIZE - 2))
             continue;
 
-        //if (it_per_id.measured_depth > 0)
-        if (it_per_id.estimated_depth > 0)
-        {
-            //printf("has depth: %d\n", it_per_id.feature_id);
+        if (!it_per_id.depth_flag)
             continue;
-        }
+        // if (it_per_id.estimated_depth > 0)
+        // {
+        //     //printf("has depth: %d\n", it_per_id.feature_id);
+        //     continue;
+        // }
         //printf("no  depth: %d\n", it_per_id.feature_id);
 
         int imu_i = it_per_id.start_frame, imu_j = imu_i - 1;
@@ -238,7 +245,7 @@ void FeatureManager::triangulateWithDepth(Vector3d Ps[], Vector3d tic[], Matrix3
                 continue;
 
             if (imu_i == imu_j)
-                it_per_id.measured_depth = f[2];
+                it_per_id.estimated_depth = f[2];
             else
             {
                 Eigen::Matrix4d Pj_i2w = Eigen::Matrix4d::Identity();
@@ -256,8 +263,8 @@ void FeatureManager::triangulateWithDepth(Vector3d Ps[], Vector3d tic[], Matrix3
                                          it_per_id.feature_per_frame[imu_i].point.y() - fi_projected[1]);
                 //if (residual.norm() < 10.0 / 460)
                 { //this can also be adjust to improve performance
-                    it_per_id.measured_depth = sqrt(fi[0] * fi[0] + fi[1] * fi[1] + fi[2] * fi[2]);
-                    sum_depth += it_per_id.measured_depth;
+                    it_per_id.estimated_depth = sqrt(fi[0] * fi[0] + fi[1] * fi[1] + fi[2] * fi[2]);
+                    sum_depth += it_per_id.estimated_depth;
                     count++;
                 }
 #if 0
