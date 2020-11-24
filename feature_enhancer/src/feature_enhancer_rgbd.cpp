@@ -44,7 +44,8 @@ float getDepth(Mat img, int x, int y)
     if (depth_img.type() != CV_32F)
         depth_img.convertTo(depth_img, CV_32F, 1.0);
 
-    float depth = depth_img.at<float>(x, y);
+    // 必须这么访问：cv::Mat.at<float>(row,col)
+    float depth = depth_img.at<float>(y, x);
     // printf("%d %d  %.3f\n", x, y, depth);
 
     // valid range: 0.4m~4m
