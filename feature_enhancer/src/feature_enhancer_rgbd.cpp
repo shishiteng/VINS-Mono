@@ -35,7 +35,7 @@ using namespace std;
 Mat cam_matrix_;
 Mat dist_coeff_;
 Eigen::Matrix4f rgb_to_depth_;
-double v_fov_;
+double v_fov_, h_fov_;
 
 ros::Publisher pub_projection_image_, pub_debug_image_, pub_xfeature_, pub_xpoints_, pub_xpoints_cut_;
 
@@ -59,8 +59,11 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr depth_points,
         Eigen::Vector4f pt_l(pt.x, pt.y, pt.z, 1);
         Eigen::Vector4f pt_c = l2c * pt_l;
 
-        double theta = atan(pt_c[0] / (pt_c[2] == 0 ? 1e-5 : pt_c[2])) * 57.3;
-        if (pt_c[2] > 0 && abs(theta) < v_fov_ / 2.f)
+        double v_theta = atan(pt_c[0] / (pt_c[2] == 0 ? 1e-5 : pt_c[2])) * 57.3;
+        double h_theta = atan(pt_c[1] / (pt_c[2] == 0 ? 1e-5 : pt_c[2])) * 57.3;
+        if (pt_c[2] > 0 &&
+            abs(v_theta) < (v_fov_ / 2.f) &&
+            abs(h_theta) < (h_fov_ / 2.f))
         {
             all_points.push_back(Point3f(pt_c[0], pt_c[1], pt_c[2]));
 
@@ -91,7 +94,7 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr depth_points,
     {
         cv::Point2f pt = image_points[i];
         cv::Point3f pt2 = all_points[i];
-        circle(draw_img, pt, 1, Scalar(255, 255, 0), -1);
+        circle(draw_img, pt, 1, Scalar(255, 255, 0), 1);
 
         int index = (int)pt.y * image.cols + (int)pt.x;
         map<int, vector<float>>::iterator iter = map_points.find(index);
@@ -160,13 +163,13 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr depth_points,
                 }
             }
 
-        circle(draw_img, cv::Point2f(p_u, p_v), 1, Scalar(0, 255, 0), 3);
+        circle(draw_img, cv::Point2f(p_u, p_v), 1, Scalar(0, 255, 0), 1);
 
         // 更新点的深度
         if (depth > 1.0)
         {
             z = depth;
-            circle(draw_img, cv::Point2f(p_u, p_v), 1, Scalar(0, 0, 255), 3);
+            circle(draw_img, cv::Point2f(p_u, p_v), 1, Scalar(0, 0, 255), 1);
             char text[10];
             sprintf(text, "%.1f", depth / n);
             cv::putText(draw_img, text, cv::Point2f(p_u, p_v), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 255));
@@ -232,6 +235,9 @@ void Callback(const sensor_msgs::ImageConstPtr &img_msg,
     EnhanceFeatures(depth_points, feature_msg, image, rgb_to_depth_);
 }
 
+int width_ = 640;
+int height_ = 480;
+
 int main(int argc, char **argv)
 {
     ros::init(argc, argv, "feature_enhancer");
@@ -252,13 +258,16 @@ int main(int argc, char **argv)
 #endif
     cam_matrix_ = Mat(3, 3, CV_64F, intrinsics);
     dist_coeff_ = Mat(4, 1, CV_64F, dist_coeff);
-    v_fov_ = atan(intrinsics[2] / intrinsics[4]) * 57.3 * 2;
+    double min_v = min(intrinsics[2], (double)width_ - intrinsics[2]);
+    double min_h = min(intrinsics[5], (double)height_ - intrinsics[5]);
+    v_fov_ = atan(min_v / intrinsics[0]) * 57.3 * 2;
+    h_fov_ = atan(min_h / intrinsics[4]) * 57.3 * 2;
     cout << "camera intrinsics:\n"
          << cam_matrix_ << endl;
-    cout << "distortion ceoffs:\n"
+    cout << "distortion ceoffs:\n  "
          << dist_coeff_.t() << endl;
-    cout << "v fov:\n"
-         << v_fov_ << endl;
+    cout << "v fov: " << v_fov_ << endl;
+    cout << "h fov: " << h_fov_ << endl;
 
     // 相机雷达外参
     rgb_to_depth_ = Eigen::Matrix4f::Identity();

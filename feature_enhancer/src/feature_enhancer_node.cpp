@@ -244,7 +244,7 @@ int main(int argc, char **argv)
     double dist_coeff[4] = {0.06267162023991868, -0.13788087101000782, 0.0008989379554903053, -0.0005280427124752625};
     cam_matrix_ = Mat(3, 3, CV_64F, intrinsics);
     dist_coeff_ = Mat(4, 1, CV_64F, dist_coeff);
-    v_fov_ = atan(intrinsics[2] / intrinsics[4]) * 57.3 * 2;
+    v_fov_ = atan(intrinsics[2] / intrinsics[0]) * 57.3 * 2;
     cout << "camera intrinsics:\n"
          << cam_matrix_ << endl;
     cout << "distortion ceoffs:\n"
