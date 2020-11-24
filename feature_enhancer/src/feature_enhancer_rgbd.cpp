@@ -34,94 +34,30 @@ using namespace std;
 
 Mat cam_matrix_;
 Mat dist_coeff_;
-Eigen::Matrix4f rgb_to_depth_;
 double v_fov_, h_fov_;
 
-ros::Publisher pub_projection_image_, pub_debug_image_, pub_xfeature_, pub_xpoints_, pub_xpoints_cut_;
+ros::Publisher pub_debug_image_, pub_xfeature_;
 
-void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr depth_points,
-                     const sensor_msgs::PointCloudConstPtr feature_points,
-                     Mat image,
-                     Eigen::Matrix4f c2l)
+float getDepth(Mat img, int x, int y)
 {
-    Eigen::Matrix4f l2c = c2l.inverse();
+    Mat depth_img = img;
+    if (depth_img.type() != CV_32F)
+        depth_img.convertTo(depth_img, CV_32F, 1.0);
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr cut_points(new pcl::PointCloud<pcl::PointXYZ>);
-    cut_points->header = depth_points->header;
+    float depth = depth_img.at<float>(x, y);
+    // printf("%d %d  %.3f\n", x, y, depth);
 
-    vector<Point2f> image_points;
-    vector<Point3f> all_points;
-    for (auto &pt : depth_points->points)
-    {
-        if (pt.z <= 0.4 || pt.z > 3.0)
-            continue;
+    // valid range: 0.4m~4m
+    if (depth > 4.0 || depth < 0.4 || isnan(depth) || isinf(depth))
+        return -1.0;
 
-        Eigen::Vector4f pt_l(pt.x, pt.y, pt.z, 1);
-        Eigen::Vector4f pt_c = l2c * pt_l;
+    return depth;
+}
 
-        double v_theta = atan(pt_c[0] / (pt_c[2] == 0 ? 1e-5 : pt_c[2])) * 57.3;
-        double h_theta = atan(pt_c[1] / (pt_c[2] == 0 ? 1e-5 : pt_c[2])) * 57.3;
-        if (pt_c[2] > 0 &&
-            abs(v_theta) < (v_fov_ / 2.f) &&
-            abs(h_theta) < (h_fov_ / 2.f))
-        {
-            all_points.push_back(Point3f(pt_c[0], pt_c[1], pt_c[2]));
-
-            pcl::PointXYZ p;
-            p.z = pt_c[0];
-            p.x = pt_c[1];
-            p.y = pt_c[2];
-            cut_points->points.push_back(p);
-        }
-    }
-    cut_points->height = 1;
-    cut_points->width = cut_points->points.size();
-    sensor_msgs::PointCloud2 outputss;
-    pcl::toROSMsg(*cut_points.get(), outputss);
-    pub_xpoints_cut_.publish(outputss);
-
-    double zero_data[3] = {0};
-    Mat rvec(3, 1, cv::DataType<double>::type, zero_data);
-    Mat tvec(3, 1, cv::DataType<double>::type, zero_data);
-    projectPoints(all_points, rvec, tvec, cam_matrix_, dist_coeff_, image_points);
+void EnhanceFeatures(Mat image, Mat depth_img, const sensor_msgs::PointCloudConstPtr feature_points)
+{
     Mat draw_img(image.size(), CV_8UC3);
     cvtColor(image, draw_img, CV_GRAY2BGR);
-
-    // 建立索引与点深度的映射
-    pcl::PointCloud<pcl::PointXYZI>::Ptr indesity_points(new pcl::PointCloud<pcl::PointXYZI>);
-    map<int, vector<float>> map_points;
-    for (unsigned int i = 0; i < image_points.size(); i++)
-    {
-        cv::Point2f pt = image_points[i];
-        cv::Point3f pt2 = all_points[i];
-        circle(draw_img, pt, 1, Scalar(255, 255, 0), 1);
-
-        int index = (int)pt.y * image.cols + (int)pt.x;
-        map<int, vector<float>>::iterator iter = map_points.find(index);
-        vector<float> v;
-        if (iter != map_points.end())
-            v = iter->second;
-        v.push_back(sqrt(pt2.x * pt2.x + pt2.y * pt2.y + pt2.z * pt2.z));
-        map_points.insert(pair<int, vector<float>>(index, v));
-
-        // 灰度点云
-        pcl::PointXYZI p;
-        p.z = pt2.x;
-        p.x = pt2.y;
-        p.y = pt2.z;
-        p.intensity = image.ptr<uchar>((int)pt.x)[(int)pt.y];
-
-        // 把p加入到点云中
-        indesity_points->points.push_back(p);
-    }
-    indesity_points->header = depth_points->header;
-    indesity_points->header.frame_id = "world";
-    indesity_points->height = 1;
-    indesity_points->width = indesity_points->points.size();
-    indesity_points->is_dense = false;
-    sensor_msgs::PointCloud2 output;
-    pcl::toROSMsg(*indesity_points.get(), output);
-    pub_xpoints_.publish(output);
 
     sensor_msgs::PointCloudPtr xfeature_points(new sensor_msgs::PointCloud);
     xfeature_points->header = feature_points->header;
@@ -143,35 +79,16 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr depth_points,
         float velocity_x = feature_points->channels[3].values[i];
         float velocity_y = feature_points->channels[4].values[i];
 
-        float depth = 0.0;
-        int n = 0;
-        int w = 0; //窗口大小
-        //ComputeMeanDepth;
-        for (int i = int(p_u - w); i > 1 && i <= int(p_u + w) && i < image.cols; i++)
-            for (int j = int(p_v - w); j > 1 && j <= int(p_v + w) && j < image.rows; j++)
-            {
-                int index = j * image.cols + i;
-                map<int, vector<float>>::iterator iter = map_points.find(index);
-                if (iter != map_points.end())
-                {
-                    vector<float> v = iter->second;
-                    for (unsigned int m = 0; m < v.size(); m++)
-                    {
-                        depth += v[m];
-                        n++;
-                    }
-                }
-            }
-
+        float depth = getDepth(depth_img, p_u, p_v);
         circle(draw_img, cv::Point2f(p_u, p_v), 1, Scalar(0, 255, 0), 1);
 
         // 更新点的深度
-        if (depth > 1.0)
+        if (depth > 1.0 && depth < 3.0)
         {
             z = depth;
             circle(draw_img, cv::Point2f(p_u, p_v), 1, Scalar(0, 0, 255), 1);
             char text[10];
-            sprintf(text, "%.1f", depth / n);
+            sprintf(text, "%.1f", depth);
             cv::putText(draw_img, text, cv::Point2f(p_u, p_v), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255, 0, 255));
         }
 
@@ -197,18 +114,18 @@ void EnhanceFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr depth_points,
 
     //发布debug图像
     std_msgs::Header header;
-    cv_bridge::CvImage projected_image(header, "bgr8", draw_img);
-    pub_projection_image_.publish(projected_image.toImageMsg());
+    cv_bridge::CvImage debug_img(header, "bgr8", draw_img);
+    pub_debug_image_.publish(debug_img.toImageMsg());
 
     imshow("debug", draw_img);
     waitKey(3);
 }
 
 void Callback(const sensor_msgs::ImageConstPtr &img_msg,
-              const sensor_msgs::PointCloudConstPtr &feature_msg,
-              const sensor_msgs::PointCloud2ConstPtr &points_msg)
+              const sensor_msgs::ImageConstPtr &depth_img_msg,
+              const sensor_msgs::PointCloudConstPtr &feature_msg)
 {
-    cv_bridge::CvImageConstPtr ptr;
+    cv_bridge::CvImageConstPtr ptr, depth_ptr;
     if (img_msg->encoding == "8UC1")
     {
         sensor_msgs::Image img;
@@ -225,14 +142,16 @@ void Callback(const sensor_msgs::ImageConstPtr &img_msg,
     {
         ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
     }
+    depth_ptr = cv_bridge::toCvCopy(depth_img_msg);
 
     Mat image = ptr->image;
+    Mat depth_image = depth_ptr->image;
 
-    pcl::PointCloud<pcl::PointXYZ>::Ptr depth_points(new pcl::PointCloud<pcl::PointXYZ>);
-    pcl::fromROSMsg(*points_msg.get(), *depth_points.get());
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr depth_points(new pcl::PointCloud<pcl::PointXYZ>);
+    // pcl::fromROSMsg(*points_msg.get(), *depth_points.get());
 
     //
-    EnhanceFeatures(depth_points, feature_msg, image, rgb_to_depth_);
+    EnhanceFeatures(image, depth_image, feature_msg);
 }
 
 int width_ = 640;
@@ -269,27 +188,21 @@ int main(int argc, char **argv)
     cout << "v fov: " << v_fov_ << endl;
     cout << "h fov: " << h_fov_ << endl;
 
-    // 相机雷达外参
-    rgb_to_depth_ = Eigen::Matrix4f::Identity();
-
     pub_debug_image_ = nh.advertise<sensor_msgs::Image>("/debug_image", 1);
-    pub_projection_image_ = nh.advertise<sensor_msgs::Image>("/projection_image", 1); //lidar点云投影到图像上
     pub_xfeature_ = nh.advertise<sensor_msgs::PointCloud>("/xfeature", 10);
-    pub_xpoints_ = nh.advertise<sensor_msgs::PointCloud2>("/xpoints", 10);
-    pub_xpoints_cut_ = nh.advertise<sensor_msgs::PointCloud2>("/sync_scan_cloud_filtered", 10);
 
 #if 0
     // realsense d435i
     message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, "/camera/color/image_raw", 10);
-    message_filters::Subscriber<sensor_msgs::PointCloud2> points_sub(nh, "/camera/depth/color/points", 10);
+    message_filters::Subscriber<sensor_msgs::PointCloud2> depth_sub(nh, "/camera/depth/color/points", 10);
 #else
     // asus xtion pro
     message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, "/camera/rgb/image_raw", 10);
-    message_filters::Subscriber<sensor_msgs::PointCloud2> points_sub(nh, "/camera/depth/points", 10);
+    message_filters::Subscriber<sensor_msgs::Image> depth_sub(nh, "/camera/depth/image", 10);
 #endif
     message_filters::Subscriber<sensor_msgs::PointCloud> features_sub(nh, "/feature_tracker/feature", 10);
-    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::PointCloud, sensor_msgs::PointCloud2> sync_pol;
-    message_filters::Synchronizer<sync_pol> sync(sync_pol(10), image_sub, features_sub, points_sub);
+    typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::PointCloud> sync_pol;
+    message_filters::Synchronizer<sync_pol> sync(sync_pol(10), image_sub, depth_sub, features_sub);
     sync.registerCallback(boost::bind(&Callback, _1, _2, _3));
 
     ros::spin();
