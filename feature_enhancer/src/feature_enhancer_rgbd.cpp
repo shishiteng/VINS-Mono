@@ -251,10 +251,10 @@ int main(int argc, char **argv)
                             0, 0, 1};
     double dist_coeff[4] = {0.1880280371074495, -0.32585125085926375, 0.0005316708069306743, -0.00013569756249956323};
 #else
-    double intrinsics[9] = {617.2996342744858, 0, 317.7881011733047,
-                            0, 621.6632590111969, 239.7894671795975,
+    double intrinsics[9] = {548.5998426668384, 0, 326.7901516013681,
+                            0, 552.0481016349838, 241.50581259335883,
                             0, 0, 1};
-    double dist_coeff[4] = {0.1880280371074495, -0.3258512508592638, 0.0005316708069306743, -0.0001356975624995632};
+    double dist_coeff[4] = {0.068708182169908, -0.1251952650118514, -0.0018113507440439055, 0.0069944015513969};
 #endif
     cam_matrix_ = Mat(3, 3, CV_64F, intrinsics);
     dist_coeff_ = Mat(4, 1, CV_64F, dist_coeff);
@@ -285,7 +285,7 @@ int main(int argc, char **argv)
 #else
     // asus xtion pro
     message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, "/camera/rgb/image_raw", 10);
-    message_filters::Subscriber<sensor_msgs::PointCloud2> points_sub(nh, "/camera/depth_registered/points", 10);
+    message_filters::Subscriber<sensor_msgs::PointCloud2> points_sub(nh, "/camera/depth/points", 10);
 #endif
     message_filters::Subscriber<sensor_msgs::PointCloud> features_sub(nh, "/feature_tracker/feature", 10);
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::PointCloud, sensor_msgs::PointCloud2> sync_pol;

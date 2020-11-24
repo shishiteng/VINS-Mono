@@ -1,0 +1,53 @@
+[1mdiff --git a/config/asus/asus.yaml b/config/asus/asus.yaml[m
+[1mindex 33f31ed..1dab66e 100644[m
+[1m--- a/config/asus/asus.yaml[m
+[1m+++ b/config/asus/asus.yaml[m
+[36m@@ -11,15 +11,15 @@[m [mcamera_name: camera[m
+ image_width: 640[m
+ image_height: 480[m
+ distortion_parameters:[m
+[31m-   k1: 0.20442609178644636[m
+[31m-   k2: -0.4276452793862582[m
+[31m-   p1: -0.0005096538517844895[m
+[31m-   p2: -0.0015548694806005862[m
+[32m+[m[32m   k1: 0.068708182169908[m
+[32m+[m[32m   k2: -0.1251952650118514[m
+[32m+[m[32m   p1: -0.0018113507440439055[m[41m [m
+[32m+[m[32m   p2: 0.0069944015513969[m
+ projection_parameters:[m
+[31m-   fx: 617.2996342744858[m
+[31m-   fy: 621.6632590111969[m
+[31m-   cx: 317.7881011733047 [m
+[31m-   cy: 239.7894671795975[m
+[32m+[m[32m   fx: 570.5998426668384[m
+[32m+[m[32m   fy: 552.0481016349838[m
+[32m+[m[32m   cx: 326.7901516013681[m
+[32m+[m[32m   cy: 241.50581259335883[m
+ [m
+ # Extrinsic parameter between IMU and Camera.[m
+ estimate_extrinsic: 1   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.[m
+[36m@@ -56,21 +56,21 @@[m [mmax_num_iterations: 8   # max solver itrations, to guarantee real time[m
+ keyframe_parallax: 10.0 # keyframe selection threshold (pixel)[m
+ [m
+ #imu parameters       The more accurate parameters you provide, the better performance[m
+[31m-acc_n: 0.2         # accelerometer measurement noise standard deviation. #0.2[m
+[32m+[m[32macc_n: 0.1         # accelerometer measurement noise standard deviation. #0.2[m
+ gyr_n: 0.002         # gyroscope measurement noise standard deviation.     #0.05[m
+ acc_w: 0.02         # accelerometer bias random work noise standard deviation.  #0.02[m
+ gyr_w: 2.0e-5       # gyroscope bias random work noise standard deviation.     #4.0e-5[m
+ g_norm: 9.805       # gravity magnitude[m
+ [m
+ #loop closure parameters[m
+[31m-loop_closure: 1                    # start loop closure[m
+[32m+[m[32mloop_closure: 0                    # start loop closure[m
+ fast_relocalization: 1             # useful in real-time and large project[m
+ load_previous_pose_graph: 0        # load and reuse previous pose graph; load from 'pose_graph_save_path'[m
+ pose_graph_save_path: "/home/tony-ws1/output/pose_graph/" # save and load path[m
+ [m
+ #unsynchronization parameters[m
+ estimate_td: 1                      # online estimate time offset between camera and imu[m
+[31m-td: 0.00                           # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)[m
+[32m+[m[32mtd: 0.023                          # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)[m
+ [m
+ #rolling shutter parameters[m
+ rolling_shutter: 1                      # 0: global shutter camera, 1: rolling shutter camera[m
