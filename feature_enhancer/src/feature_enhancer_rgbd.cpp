@@ -41,7 +41,6 @@ ros::Publisher pub_debug_image_, pub_xfeature_;
 float getDepth(Mat img, int x, int y)
 {
     Mat depth_img = img;
-<<<<<<< HEAD
     if (depth_img.type() != CV_32F)
         depth_img.convertTo(depth_img, CV_32F, 1.0);
 
@@ -52,13 +51,6 @@ float getDepth(Mat img, int x, int y)
     if (depth > 4.0 || depth < 0.4 || isnan(depth) || isinf(depth))
         return -1.0;
 
-=======
-    depth_img.convertTo(depth_img, CV_32F, 1.0);
-
-    float inv_depth = depth_img.at<float>(x, y);
-    float depth = (inv_depth > 0 && inv_depth < 1) ? 1.0 / inv_depth : -1.0;
-
->>>>>>> b4f5f71536686399fc63406b549f0264d6d3be6c
     return depth;
 }
 
@@ -150,11 +142,7 @@ void Callback(const sensor_msgs::ImageConstPtr &img_msg,
     {
         ptr = cv_bridge::toCvCopy(img_msg, sensor_msgs::image_encodings::MONO8);
     }
-<<<<<<< HEAD
     depth_ptr = cv_bridge::toCvCopy(depth_img_msg);
-=======
-    depth_ptr = cv_bridge::toCvCopy(depth_img_msg, sensor_msgs::image_encodings::MONO8);
->>>>>>> b4f5f71536686399fc63406b549f0264d6d3be6c
 
     Mat image = ptr->image;
     Mat depth_image = depth_ptr->image;
