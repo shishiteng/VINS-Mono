@@ -31,6 +31,10 @@ include_directories(
 
 add_executable(feature_enhancer_node
     src/feature_enhancer_node.cpp
-    )
-
+)
 target_link_libraries(feature_enhancer_node ${catkin_LIBRARIES} ${OpenCV_LIBS})
+
+add_executable(feature_enhancer_rgbd
+    src/feature_enhancer_rgbd.cpp
+)
+target_link_libraries(feature_enhancer_rgbd ${catkin_LIBRARIES} ${OpenCV_LIBS})

@@ -11,15 +11,15 @@ camera_name: camera
 image_width: 640
 image_height: 480
 distortion_parameters:
-   k1: 0.20442609178644636  
-   k2: -0.4276452793862582
-   p1: -0.0005096538517844895
-   p2: -0.0015548694806005862
+   k1: 0.1880280371074495
+   k2: -0.32585125085926375
+   p1: 0.0005316708069306743
+   p2: -0.00013569756249956323
 projection_parameters:
-   fx: 617.2996342744858
-   fy: 621.6632590111969
-   cx: 317.7881011733047
-   cy: 239.7894671795975 
+   fx: 624.5519731856232
+   fy: 621.1944399796929
+   cx: 319.2056827801858
+   cy: 241.12556633733737
 
 # Extrinsic parameter between IMU and Camera.
 estimate_extrinsic: 1   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
@@ -31,15 +31,15 @@ extrinsicRotation: !!opencv-matrix
    rows: 3
    cols: 3
    dt: d
-   data: [ 0.99964621,  0.01105994,  0.02418954,
-           -0.01088975,  0.9999151,  -0.00715601, 
-           -0.02426663,  0.00689006,  0.99968178]
+   data: [ 0.99989222,  0.01464348,  0.00106127,
+          -0.01464738,  0.99988563,  0.00376507,
+          -0.00100602, -0.00378021,  0.99999235]
 #Translation from camera frame to imu frame, imu^T_cam
 extrinsicTranslation: !!opencv-matrix
    rows: 3
    cols: 1
    dt: d
-   data: [0.07494282, -0.01077138, -0.00641822]
+   data: [-0.013, -0.015, -0.0014]
 
 #feature traker paprameters
 max_cnt: 200            # max feature number in feature tracking
@@ -70,7 +70,7 @@ pose_graph_save_path: "/home/tony-ws1/output/pose_graph/" # save and load path
 
 #unsynchronization parameters
 estimate_td: 1                      # online estimate time offset between camera and imu
-td: 0.025                           # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
+td: 0.00                           # initial value of time offset. unit: s. readed image clock + td = real image clock (IMU clock)
 
 #rolling shutter parameters
 rolling_shutter: 1                      # 0: global shutter camera, 1: rolling shutter camera
