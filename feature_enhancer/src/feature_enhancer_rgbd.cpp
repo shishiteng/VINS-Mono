@@ -238,10 +238,18 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
 
     // 导入相机内参数
+#if 0
+    // realsense d435i
     double intrinsics[9] = {624.5519731856232, 0, 319.2056827801858,
                             0, 621.1944399796929, 241.12556633733737,
                             0, 0, 1};
     double dist_coeff[4] = {0.1880280371074495, -0.32585125085926375, 0.0005316708069306743, -0.00013569756249956323};
+#else
+    double intrinsics[9] = {617.2996342744858, 0, 317.7881011733047,
+                            0, 621.6632590111969, 239.7894671795975,
+                            0, 0, 1};
+    double dist_coeff[4] = {0.1880280371074495, -0.3258512508592638, 0.0005316708069306743, -0.0001356975624995632};
+#endif
     cam_matrix_ = Mat(3, 3, CV_64F, intrinsics);
     dist_coeff_ = Mat(4, 1, CV_64F, dist_coeff);
     v_fov_ = atan(intrinsics[2] / intrinsics[4]) * 57.3 * 2;
@@ -261,14 +269,14 @@ int main(int argc, char **argv)
     pub_xpoints_ = nh.advertise<sensor_msgs::PointCloud2>("/xpoints", 10);
     pub_xpoints_cut_ = nh.advertise<sensor_msgs::PointCloud2>("/sync_scan_cloud_filtered", 10);
 
-#if 1
+#if 0
     // realsense d435i
     message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, "/camera/color/image_raw", 10);
     message_filters::Subscriber<sensor_msgs::PointCloud2> points_sub(nh, "/camera/depth/color/points", 10);
 #else
     // asus xtion pro
-    message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, "/camera/color/image_raw", 10);
-    message_filters::Subscriber<sensor_msgs::PointCloud2> points_sub(nh, "/camera/depth/color/points", 10);
+    message_filters::Subscriber<sensor_msgs::Image> image_sub(nh, "/camera/rgb/image_raw", 10);
+    message_filters::Subscriber<sensor_msgs::PointCloud2> points_sub(nh, "/camera/depth_registered/points", 10);
 #endif
     message_filters::Subscriber<sensor_msgs::PointCloud> features_sub(nh, "/feature_tracker/feature", 10);
     typedef message_filters::sync_policies::ApproximateTime<sensor_msgs::Image, sensor_msgs::PointCloud, sensor_msgs::PointCloud2> sync_pol;
