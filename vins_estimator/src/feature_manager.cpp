@@ -263,7 +263,8 @@ void FeatureManager::triangulateWithDepth(Vector3d Ps[], Vector3d tic[], Matrix3
                                          it_per_id.feature_per_frame[imu_i].point.y() - fi_projected[1]);
                 //if (residual.norm() < 10.0 / 460)
                 { //this can also be adjust to improve performance
-                    it_per_id.estimated_depth = sqrt(fi[0] * fi[0] + fi[1] * fi[1] + fi[2] * fi[2]);
+                    // it_per_id.estimated_depth = sqrt(fi[0] * fi[0] + fi[1] * fi[1] + fi[2] * fi[2]);
+                    it_per_id.estimated_depth = fi[2];
                     sum_depth += it_per_id.estimated_depth;
                     count++;
                 }

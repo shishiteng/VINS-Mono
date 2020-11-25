@@ -22,7 +22,7 @@ public:
   {
     point.x() = _point(0);
     point.y() = _point(1);
-    point.z() = _point(2);
+    point.z() = 1.0;
     uv.x() = _point(3);
     uv.y() = _point(4);
     velocity.x() = _point(5);
